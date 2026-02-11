@@ -1,13 +1,15 @@
 using FluentAssertions;
+using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Horstmeier.NugetLicenses.Tests;
 
 [Trait("Category", "Integration")]
 public class NuGetLicenseResolverTests
 {
-    private readonly NuGetLicenseResolver _resolver = new();
+    private readonly NuGetLicenseResolver _resolver = new(new LicenseCheckSettings(), NullLogger<NuGetLicenseResolver>.Instance);
 
     [Fact]
     public async Task ResolveAsync_KnownPackageWithSpdx_ReturnsLicenseExpression()

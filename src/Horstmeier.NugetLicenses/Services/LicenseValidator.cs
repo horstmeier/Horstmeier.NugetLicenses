@@ -1,5 +1,6 @@
 using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Horstmeier.NugetLicenses.Services;
 
@@ -7,11 +8,13 @@ public class LicenseValidator : ILicenseValidator
 {
     private readonly HashSet<string> _permittedLicenses;
     private readonly HashSet<string> _exemptPackages;
+    private readonly ILogger<LicenseValidator> _logger;
 
-    public LicenseValidator(LicenseCheckSettings settings)
+    public LicenseValidator(LicenseCheckSettings settings, ILogger<LicenseValidator> logger)
     {
         _permittedLicenses = new HashSet<string>(settings.PermittedLicenses, StringComparer.OrdinalIgnoreCase);
         _exemptPackages = new HashSet<string>(settings.ExemptPackages, StringComparer.OrdinalIgnoreCase);
+        _logger = logger;
     }
 
     public LicenseValidationResult Validate(IReadOnlyList<LicenseInfo> licenses)
@@ -21,7 +24,10 @@ public class LicenseValidator : ILicenseValidator
         foreach (var license in licenses)
         {
             if (_exemptPackages.Contains(license.PackageId))
+            {
+                _logger.LogDebug("Skipping exempt package {PackageId}", license.PackageId);
                 continue;
+            }
 
             if (string.IsNullOrWhiteSpace(license.LicenseExpression))
             {
@@ -62,8 +68,9 @@ public class LicenseValidator : ILicenseValidator
         if (andParts.Count > 1)
             return andParts.All(IsExpressionPermitted);
 
-        // Single license identifier
-        return _permittedLicenses.Contains(expression.Trim());
+        // Single license identifier — strip WITH exception before checking
+        var identifier = StripWithException(expression.Trim());
+        return _permittedLicenses.Contains(identifier);
     }
 
     internal static List<string> SplitTopLevel(string expression, string op)
@@ -106,6 +113,12 @@ public class LicenseValidator : ILicenseValidator
         }
 
         return parts;
+    }
+
+    private static string StripWithException(string identifier)
+    {
+        var withIndex = identifier.IndexOf(" WITH ", StringComparison.OrdinalIgnoreCase);
+        return withIndex >= 0 ? identifier[..withIndex].Trim() : identifier;
     }
 
     private static string StripOuterParentheses(string s)

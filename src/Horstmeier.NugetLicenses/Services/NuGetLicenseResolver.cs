@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
+using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
+using Microsoft.Extensions.Logging;
 using NuGet.Common;
-using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -9,47 +11,69 @@ namespace Horstmeier.NugetLicenses.Services;
 
 public class NuGetLicenseResolver : ILicenseResolver
 {
+    private const int MaxDegreeOfParallelism = 8;
+    private readonly ILogger<NuGetLicenseResolver> _logger;
+    private readonly string _nuGetSource;
+
+    public NuGetLicenseResolver(LicenseCheckSettings settings, ILogger<NuGetLicenseResolver> logger)
+    {
+        _nuGetSource = settings.NuGetSource;
+        _logger = logger;
+    }
+
     public async Task<IReadOnlyList<LicenseInfo>> ResolveAsync(
         IReadOnlyList<PackageReference> packages,
         CancellationToken cancellationToken = default)
     {
-        var repository = Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json");
+        var repository = Repository.Factory.GetCoreV3(_nuGetSource);
         var metadataResource = await repository.GetResourceAsync<PackageMetadataResource>(cancellationToken);
 
-        var results = new List<LicenseInfo>();
+        var results = new ConcurrentBag<LicenseInfo>();
         var cache = new SourceCacheContext();
 
-        foreach (var package in packages)
-        {
-            try
+        await Parallel.ForEachAsync(packages,
+            new ParallelOptions
             {
-                var identity = new NuGet.Packaging.Core.PackageIdentity(
-                    package.Id,
-                    NuGetVersion.Parse(package.Version));
-
-                var metadata = await metadataResource.GetMetadataAsync(
-                    identity,
-                    cache,
-                    NullLogger.Instance,
-                    cancellationToken);
-
-                if (metadata is null)
+                MaxDegreeOfParallelism = MaxDegreeOfParallelism,
+                CancellationToken = cancellationToken
+            },
+            async (package, ct) =>
+            {
+                try
                 {
-                    results.Add(new LicenseInfo(package.Id, package.Version, null, null));
-                    continue;
+                    var identity = new NuGet.Packaging.Core.PackageIdentity(
+                        package.Id,
+                        NuGetVersion.Parse(package.Version));
+
+                    var metadata = await metadataResource.GetMetadataAsync(
+                        identity,
+                        cache,
+                        NullLogger.Instance,
+                        ct);
+
+                    if (metadata is null)
+                    {
+                        _logger.LogWarning("No metadata found for {PackageId} {Version}", package.Id, package.Version);
+                        results.Add(new LicenseInfo(package.Id, package.Version, null, null));
+                        return;
+                    }
+
+                    var licenseExpression = metadata.LicenseMetadata?.LicenseExpression?.ToString();
+                    var licenseUrl = metadata.LicenseUrl?.ToString();
+
+                    results.Add(new LicenseInfo(package.Id, package.Version, licenseExpression, licenseUrl));
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to resolve license for {PackageId} {Version}", package.Id, package.Version);
+                    results.Add(new LicenseInfo(package.Id, package.Version, null, null));
+                }
+            });
 
-                var licenseExpression = metadata.LicenseMetadata?.LicenseExpression?.ToString();
-                var licenseUrl = metadata.LicenseUrl?.ToString();
-
-                results.Add(new LicenseInfo(package.Id, package.Version, licenseExpression, licenseUrl));
-            }
-            catch (Exception)
-            {
-                results.Add(new LicenseInfo(package.Id, package.Version, null, null));
-            }
-        }
-
-        return results;
+        return results.OrderBy(r => r.PackageId).ThenBy(r => r.Version).ToList();
     }
 }

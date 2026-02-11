@@ -2,6 +2,7 @@ using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 var configuration = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
@@ -21,7 +22,15 @@ if (!string.IsNullOrWhiteSpace(cliPath))
 if (configuration["DumpPackages"] is { } dump)
     settings.DumpPackages = string.IsNullOrEmpty(dump) || bool.Parse(dump);
 
+// Configuration validation
+if (settings.PermittedLicenses.Length == 0)
+    Console.Error.WriteLine("Warning: No permitted licenses configured. All packages will be flagged as violations.");
+
+if (!Directory.Exists(settings.ProjectPath))
+    Console.Error.WriteLine($"Warning: Project path does not exist: {Path.GetFullPath(settings.ProjectPath)}");
+
 var services = new ServiceCollection()
+    .AddLogging(b => b.AddConsole())
     .AddSingleton(settings)
     .AddSingleton<IPackageLockParser, PackageLockParser>()
     .AddSingleton<ILicenseResolver, NuGetLicenseResolver>()

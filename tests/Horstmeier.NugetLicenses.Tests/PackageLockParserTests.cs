@@ -1,12 +1,13 @@
 using FluentAssertions;
 using Horstmeier.NugetLicenses.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Horstmeier.NugetLicenses.Tests;
 
 public class PackageLockParserTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
-    private readonly PackageLockParser _parser = new();
+    private readonly PackageLockParser _parser = new(NullLogger<PackageLockParser>.Instance);
 
     private string CreateTempLockFile(string json)
     {

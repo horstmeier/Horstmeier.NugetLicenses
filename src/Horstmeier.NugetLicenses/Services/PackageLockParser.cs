@@ -1,10 +1,18 @@
 using System.Text.Json;
 using Horstmeier.NugetLicenses.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Horstmeier.NugetLicenses.Services;
 
 public class PackageLockParser : IPackageLockParser
 {
+    private readonly ILogger<PackageLockParser> _logger;
+
+    public PackageLockParser(ILogger<PackageLockParser> logger)
+    {
+        _logger = logger;
+    }
+
     public IReadOnlyList<PackageReference> Parse(string lockFilePath)
     {
         if (!File.Exists(lockFilePath))
@@ -42,6 +50,7 @@ public class PackageLockParser : IPackageLockParser
             }
         }
 
+        _logger.LogInformation("Parsed {Count} unique packages from {Path}", packages.Count, lockFilePath);
         return packages;
     }
 }

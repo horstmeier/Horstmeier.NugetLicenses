@@ -2,6 +2,7 @@ using FluentAssertions;
 using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Horstmeier.NugetLicenses.Tests;
 
@@ -16,7 +17,7 @@ public class LicenseValidatorTests
             PermittedLicenses = permitted ?? ["MIT", "Apache-2.0"],
             ExemptPackages = exempt ?? []
         };
-        return new LicenseValidator(settings);
+        return new LicenseValidator(settings, NullLogger<LicenseValidator>.Instance);
     }
 
     [Fact]
@@ -215,5 +216,48 @@ public class LicenseValidatorTests
 
         // (MIT AND Apache-2.0) OR GPL-3.0 — the left branch is fully permitted
         validator.IsExpressionPermitted("( MIT AND Apache-2.0 ) OR GPL-3.0").Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_WithException_BasePermitted_NoViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "Apache-2.0 WITH LLVM-exception", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_WithException_BaseNotPermitted_Violation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0 WITH Classpath-exception-2.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations[0].Reason.Should().Contain("GPL-3.0 WITH Classpath-exception-2.0");
+    }
+
+    [Fact]
+    public void Validate_WithException_InCompoundExpression_Works()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT AND Apache-2.0 WITH LLVM-exception", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
     }
 }
