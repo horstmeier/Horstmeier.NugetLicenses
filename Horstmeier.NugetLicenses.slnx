@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Horstmeier.NugetLicenses/Horstmeier.NugetLicenses.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Horstmeier.NugetLicenses.Tests/Horstmeier.NugetLicenses.Tests.csproj" />
+  </Folder>
+</Solution>

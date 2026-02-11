@@ -1,0 +1,219 @@
+using FluentAssertions;
+using Horstmeier.NugetLicenses.Configuration;
+using Horstmeier.NugetLicenses.Models;
+using Horstmeier.NugetLicenses.Services;
+
+namespace Horstmeier.NugetLicenses.Tests;
+
+public class LicenseValidatorTests
+{
+    private static LicenseValidator CreateValidator(
+        string[]? permitted = null,
+        string[]? exempt = null)
+    {
+        var settings = new LicenseCheckSettings
+        {
+            PermittedLicenses = permitted ?? ["MIT", "Apache-2.0"],
+            ExemptPackages = exempt ?? []
+        };
+        return new LicenseValidator(settings);
+    }
+
+    [Fact]
+    public void Validate_PermittedLicense_NoViolations()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+        result.TotalPackages.Should().Be(1);
+        result.ValidPackages.Should().Be(1);
+    }
+
+    [Fact]
+    public void Validate_DeniedLicense_ReturnsViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations.Should().HaveCount(1);
+        result.Violations[0].PackageId.Should().Be("PackageA");
+        result.Violations[0].Reason.Should().Contain("GPL-3.0");
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_SkipsValidation()
+    {
+        var validator = CreateValidator(exempt: ["PackageA"]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_CaseInsensitive()
+    {
+        var validator = CreateValidator(exempt: ["packagea"]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_NoLicenseExpression_ReturnsViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", null, "https://example.com/license")
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations[0].Reason.Should().Contain("No SPDX license expression");
+        result.Violations[0].LicenseUrl.Should().Be("https://example.com/license");
+    }
+
+    [Fact]
+    public void Validate_EmptyLicenseExpression_ReturnsViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "  ", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_OrExpression_OnePermitted_NoViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT OR GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_OrExpression_NonePermitted_Violation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0 OR LGPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_AndExpression_AllPermitted_NoViolation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT AND Apache-2.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_AndExpression_OneNotPermitted_Violation()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT AND GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Validate_PermittedLicense_CaseInsensitive()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "mit", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_MultiplePackages_MixedResults()
+    {
+        var validator = CreateValidator();
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "MIT", null),
+            new("PackageB", "2.0.0", "GPL-3.0", null),
+            new("PackageC", "3.0.0", "Apache-2.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations.Should().HaveCount(1);
+        result.Violations[0].PackageId.Should().Be("PackageB");
+        result.TotalPackages.Should().Be(3);
+        result.ValidPackages.Should().Be(2);
+    }
+
+    [Fact]
+    public void IsExpressionPermitted_ParenthesizedOr_Works()
+    {
+        var validator = CreateValidator();
+
+        validator.IsExpressionPermitted("( MIT OR GPL-3.0 )").Should().BeTrue();
+    }
+
+    [Fact]
+    public void IsExpressionPermitted_NestedExpression_Works()
+    {
+        var validator = CreateValidator();
+
+        // (MIT AND Apache-2.0) OR GPL-3.0 — the left branch is fully permitted
+        validator.IsExpressionPermitted("( MIT AND Apache-2.0 ) OR GPL-3.0").Should().BeTrue();
+    }
+}
