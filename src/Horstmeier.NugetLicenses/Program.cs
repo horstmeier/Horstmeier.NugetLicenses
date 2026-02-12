@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 // Normalize bare boolean flags (e.g. --ShowAllPackages) to --Flag=true
 // so the CommandLine provider doesn't consume the next argument as its value
-string[] booleanFlags = ["--ShowAllPackages"];
+string[] booleanFlags = ["--ShowAllPackages", "--Quiet"];
 var normalizedArgs = args.Select(a =>
     booleanFlags.Any(f => f.Equals(a, StringComparison.OrdinalIgnoreCase))
         ? $"{a}=true"
@@ -34,6 +34,10 @@ if (configuration["ShowAllPackages"] is { } showAll)
 if (configuration["OutputFormat"] is { } fmt)
     settings.OutputFormat = fmt;
 
+var quiet = false;
+if (configuration["Quiet"] is { } q)
+    quiet = bool.Parse(q);
+
 // Configuration validation
 if (settings.PermittedLicenses.Length == 0)
     Console.Error.WriteLine("Warning: No permitted licenses configured. All packages will be flagged as violations.");
@@ -42,7 +46,7 @@ if (!Directory.Exists(settings.ProjectPath))
     Console.Error.WriteLine($"Warning: Project path does not exist: {Path.GetFullPath(settings.ProjectPath)}");
 
 var services = new ServiceCollection()
-    .AddLogging(b => b.AddConsole())
+    .AddLogging(b => b.AddConsole().SetMinimumLevel(quiet ? LogLevel.Warning : LogLevel.Information))
     .AddHttpClient()
     .AddSingleton(settings)
     .AddSingleton<IPackageLockParser, PackageLockParser>()
@@ -57,15 +61,18 @@ var resolver = services.GetRequiredService<ILicenseResolver>();
 var validator = services.GetRequiredService<ILicenseValidator>();
 var reportGenerator = services.GetRequiredService<IReportGenerator>();
 
-Console.Error.WriteLine($"Scanning for lock files under: {Path.GetFullPath(settings.ProjectPath)}");
+if (!quiet)
+    Console.Error.WriteLine($"Scanning for lock files under: {Path.GetFullPath(settings.ProjectPath)}");
 
 var scanResult = parser.ParseDirectory(settings.ProjectPath);
 
-Console.Error.WriteLine($"Found {scanResult.Packages.Count} unique packages across {scanResult.LockFileCount} lock file(s)");
+if (!quiet)
+    Console.Error.WriteLine($"Found {scanResult.Packages.Count} unique packages across {scanResult.LockFileCount} lock file(s)");
 
 var licenses = await resolver.ResolveAsync(scanResult.Packages);
 
-Console.Error.WriteLine("Resolving licenses...");
+if (!quiet)
+    Console.Error.WriteLine("Resolving licenses...");
 
 var validationResult = validator.Validate(licenses);
 

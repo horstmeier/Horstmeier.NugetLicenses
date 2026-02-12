@@ -22,6 +22,9 @@ dotnet run --project src/Horstmeier.NugetLicenses -- --ShowAllPackages
 # Output as markdown or JSON
 dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=markdown
 dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=json
+
+# Quiet mode — suppress info logging, only output the report
+dotnet run --project src/Horstmeier.NugetLicenses -- --Quiet
 ```
 
 Exit codes:
