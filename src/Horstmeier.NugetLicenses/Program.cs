@@ -1,14 +1,23 @@
 using Horstmeier.NugetLicenses.Configuration;
+using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+// Normalize bare boolean flags (e.g. --ShowAllPackages) to --Flag=true
+// so the CommandLine provider doesn't consume the next argument as its value
+string[] booleanFlags = ["--ShowAllPackages"];
+var normalizedArgs = args.Select(a =>
+    booleanFlags.Any(f => f.Equals(a, StringComparison.OrdinalIgnoreCase))
+        ? $"{a}=true"
+        : a).ToArray();
+
 var configuration = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: true)
     .AddEnvironmentVariables(prefix: "LICENSECHECK_")
-    .AddCommandLine(args)
+    .AddCommandLine(normalizedArgs)
     .Build();
 
 var settings = new LicenseCheckSettings();
@@ -19,8 +28,11 @@ var cliPath = configuration["ProjectPath"];
 if (!string.IsNullOrWhiteSpace(cliPath))
     settings.ProjectPath = cliPath;
 
-if (configuration["DumpPackages"] is { } dump)
-    settings.DumpPackages = string.IsNullOrEmpty(dump) || bool.Parse(dump);
+if (configuration["ShowAllPackages"] is { } showAll)
+    settings.ShowAllPackages = bool.Parse(showAll);
+
+if (configuration["OutputFormat"] is { } fmt)
+    settings.OutputFormat = fmt;
 
 // Configuration validation
 if (settings.PermittedLicenses.Length == 0)
@@ -31,63 +43,65 @@ if (!Directory.Exists(settings.ProjectPath))
 
 var services = new ServiceCollection()
     .AddLogging(b => b.AddConsole())
+    .AddHttpClient()
     .AddSingleton(settings)
     .AddSingleton<IPackageLockParser, PackageLockParser>()
+    .AddSingleton<ILicenseFileAnalyzer, LicenseFileAnalyzer>()
     .AddSingleton<ILicenseResolver, NuGetLicenseResolver>()
     .AddSingleton<ILicenseValidator, LicenseValidator>()
+    .AddSingleton<IReportGenerator, ReportGenerator>()
     .BuildServiceProvider();
 
 var parser = services.GetRequiredService<IPackageLockParser>();
 var resolver = services.GetRequiredService<ILicenseResolver>();
 var validator = services.GetRequiredService<ILicenseValidator>();
+var reportGenerator = services.GetRequiredService<IReportGenerator>();
 
-var lockFilePath = Path.Combine(settings.ProjectPath, "packages.lock.json");
-Console.WriteLine($"Checking licenses for: {Path.GetFullPath(lockFilePath)}");
+Console.Error.WriteLine($"Scanning for lock files under: {Path.GetFullPath(settings.ProjectPath)}");
 
-IReadOnlyList<Horstmeier.NugetLicenses.Models.PackageReference> packages;
-try
+var scanResult = parser.ParseDirectory(settings.ProjectPath);
+
+Console.Error.WriteLine($"Found {scanResult.Packages.Count} unique packages across {scanResult.LockFileCount} lock file(s)");
+
+var licenses = await resolver.ResolveAsync(scanResult.Packages);
+
+Console.Error.WriteLine("Resolving licenses...");
+
+var validationResult = validator.Validate(licenses);
+
+// Build report entries
+var licenseMap = licenses.ToDictionary(
+    l => $"{l.PackageId.ToLowerInvariant()}|{l.Version.ToLowerInvariant()}",
+    l => l,
+    StringComparer.OrdinalIgnoreCase);
+
+var violationMap = validationResult.Violations.ToDictionary(
+    v => $"{v.PackageId.ToLowerInvariant()}|{v.Version.ToLowerInvariant()}",
+    v => v,
+    StringComparer.OrdinalIgnoreCase);
+
+var entries = new List<PackageReportEntry>();
+foreach (var license in licenses)
 {
-    packages = parser.Parse(lockFilePath);
-}
-catch (FileNotFoundException ex)
-{
-    Console.Error.WriteLine(ex.Message);
-    return 1;
-}
+    var key = $"{license.PackageId.ToLowerInvariant()}|{license.Version.ToLowerInvariant()}";
+    var isViolation = violationMap.TryGetValue(key, out var violation);
+    var licenseDisplay = license.LicenseExpression ?? license.LicenseUrl ?? "(unknown)";
 
-Console.WriteLine($"Found {packages.Count} unique packages");
+    scanResult.ProjectsByPackage.TryGetValue(key, out var projects);
 
-var licenses = await resolver.ResolveAsync(packages);
-
-if (settings.DumpPackages)
-{
-    Console.WriteLine();
-    Console.WriteLine($"{"Package",-50} {"Version",-20} {"License",-30}");
-    Console.WriteLine(new string('-', 100));
-    foreach (var license in licenses.OrderBy(l => l.PackageId))
+    if (isViolation || settings.ShowAllPackages)
     {
-        var expr = license.LicenseExpression ?? license.LicenseUrl ?? "(unknown)";
-        Console.WriteLine($"{license.PackageId,-50} {license.Version,-20} {expr,-30}");
+        entries.Add(new PackageReportEntry(
+            license.PackageId,
+            license.Version,
+            licenseDisplay,
+            isViolation,
+            violation?.Reason,
+            isViolation ? (IReadOnlyList<string>)(projects ?? []) : []));
     }
-    Console.WriteLine();
 }
 
-var result = validator.Validate(licenses);
+var report = reportGenerator.Generate(entries, validationResult);
+Console.Out.WriteLine(report);
 
-Console.WriteLine($"Valid: {result.ValidPackages}/{result.TotalPackages}");
-
-if (result.HasViolations)
-{
-    Console.Error.WriteLine($"\n{result.Violations.Count} license violation(s) found:");
-    foreach (var violation in result.Violations)
-    {
-        Console.Error.WriteLine($"  - {violation.PackageId} {violation.Version}: {violation.Reason}");
-        if (violation.LicenseUrl is not null)
-            Console.Error.WriteLine($"    License URL: {violation.LicenseUrl}");
-    }
-
-    return 1;
-}
-
-Console.WriteLine("\nAll package licenses are permitted.");
-return 0;
+return validationResult.HasViolations ? 1 : 0;

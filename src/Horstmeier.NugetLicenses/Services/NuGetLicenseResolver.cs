@@ -13,11 +13,13 @@ public class NuGetLicenseResolver : ILicenseResolver
 {
     private const int MaxDegreeOfParallelism = 8;
     private readonly ILogger<NuGetLicenseResolver> _logger;
+    private readonly ILicenseFileAnalyzer _analyzer;
     private readonly string _nuGetSource;
 
-    public NuGetLicenseResolver(LicenseCheckSettings settings, ILogger<NuGetLicenseResolver> logger)
+    public NuGetLicenseResolver(LicenseCheckSettings settings, ILicenseFileAnalyzer analyzer, ILogger<NuGetLicenseResolver> logger)
     {
         _nuGetSource = settings.NuGetSource;
+        _analyzer = analyzer;
         _logger = logger;
     }
 
@@ -60,6 +62,13 @@ public class NuGetLicenseResolver : ILicenseResolver
 
                     var licenseExpression = metadata.LicenseMetadata?.LicenseExpression?.ToString();
                     var licenseUrl = metadata.LicenseUrl?.ToString();
+
+                    if (string.IsNullOrEmpty(licenseExpression) && !string.IsNullOrEmpty(licenseUrl))
+                    {
+                        var detected = await _analyzer.TryIdentifyFromUrlAsync(licenseUrl, ct);
+                        if (detected is not null)
+                            licenseExpression = detected;
+                    }
 
                     results.Add(new LicenseInfo(package.Id, package.Version, licenseExpression, licenseUrl));
                 }

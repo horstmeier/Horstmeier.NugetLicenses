@@ -10,7 +10,7 @@ public class LicenseValidatorTests
 {
     private static LicenseValidator CreateValidator(
         string[]? permitted = null,
-        string[]? exempt = null)
+        ExemptPackage[]? exempt = null)
     {
         var settings = new LicenseCheckSettings
         {
@@ -56,7 +56,7 @@ public class LicenseValidatorTests
     [Fact]
     public void Validate_ExemptPackage_SkipsValidation()
     {
-        var validator = CreateValidator(exempt: ["PackageA"]);
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "PackageA", Reason = "Internal" }]);
         var licenses = new List<LicenseInfo>
         {
             new("PackageA", "1.0.0", "GPL-3.0", null)
@@ -70,10 +70,42 @@ public class LicenseValidatorTests
     [Fact]
     public void Validate_ExemptPackage_CaseInsensitive()
     {
-        var validator = CreateValidator(exempt: ["packagea"]);
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "packagea" }]);
         var licenses = new List<LicenseInfo>
         {
             new("PackageA", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_WithVersion_MatchesOnlyThatVersion()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "PackageA", Version = "1.0.0" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null),
+            new("PackageA", "2.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations.Should().HaveCount(1);
+        result.Violations[0].Version.Should().Be("2.0.0");
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_WithoutVersion_MatchesAllVersions()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "PackageA" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null),
+            new("PackageA", "2.0.0", "GPL-3.0", null)
         };
 
         var result = validator.Validate(licenses);
@@ -259,5 +291,70 @@ public class LicenseValidatorTests
         var result = validator.Validate(licenses);
 
         result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_VersionWildcard_MatchesAllVersions()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "PackageA", Version = "*" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("PackageA", "1.0.0", "GPL-3.0", null),
+            new("PackageA", "2.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_TrailingWildcard_MatchesPrefix()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "MyCompany.*" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("MyCompany.Core", "1.0.0", "GPL-3.0", null),
+            new("MyCompany.Utils", "2.0.0", "GPL-3.0", null),
+            new("OtherPackage", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations.Should().HaveCount(1);
+        result.Violations[0].PackageId.Should().Be("OtherPackage");
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_TrailingWildcard_CaseInsensitive()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "mycompany.*" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("MyCompany.Core", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Validate_ExemptPackage_TrailingWildcardAndVersionWildcard_Combined()
+    {
+        var validator = CreateValidator(exempt: [new ExemptPackage { PackageName = "Internal.*", Version = "*" }]);
+        var licenses = new List<LicenseInfo>
+        {
+            new("Internal.Lib", "1.0.0", "GPL-3.0", null),
+            new("Internal.Api", "3.5.0", "AGPL-3.0", null),
+            new("External.Lib", "1.0.0", "GPL-3.0", null)
+        };
+
+        var result = validator.Validate(licenses);
+
+        result.HasViolations.Should().BeTrue();
+        result.Violations.Should().HaveCount(1);
+        result.Violations[0].PackageId.Should().Be("External.Lib");
     }
 }

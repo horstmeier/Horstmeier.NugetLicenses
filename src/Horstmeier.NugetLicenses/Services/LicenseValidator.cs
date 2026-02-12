@@ -7,13 +7,13 @@ namespace Horstmeier.NugetLicenses.Services;
 public class LicenseValidator : ILicenseValidator
 {
     private readonly HashSet<string> _permittedLicenses;
-    private readonly HashSet<string> _exemptPackages;
+    private readonly ExemptPackage[] _exemptPackages;
     private readonly ILogger<LicenseValidator> _logger;
 
     public LicenseValidator(LicenseCheckSettings settings, ILogger<LicenseValidator> logger)
     {
         _permittedLicenses = new HashSet<string>(settings.PermittedLicenses, StringComparer.OrdinalIgnoreCase);
-        _exemptPackages = new HashSet<string>(settings.ExemptPackages, StringComparer.OrdinalIgnoreCase);
+        _exemptPackages = settings.ExemptPackages;
         _logger = logger;
     }
 
@@ -23,9 +23,13 @@ public class LicenseValidator : ILicenseValidator
 
         foreach (var license in licenses)
         {
-            if (_exemptPackages.Contains(license.PackageId))
+            var exemption = _exemptPackages.FirstOrDefault(e =>
+                MatchesPackageName(e.PackageName, license.PackageId)
+                && MatchesVersion(e.Version, license.Version));
+            if (exemption is not null)
             {
-                _logger.LogDebug("Skipping exempt package {PackageId}", license.PackageId);
+                _logger.LogDebug("Skipping exempt package {PackageId} {Version}: {Reason}",
+                    license.PackageId, license.Version, exemption.Reason ?? "no reason given");
                 continue;
             }
 
@@ -147,5 +151,21 @@ public class LicenseValidator : ILicenseValidator
         }
 
         return s;
+    }
+
+    private static bool MatchesPackageName(string pattern, string packageId)
+    {
+        if (pattern.EndsWith('*'))
+            return packageId.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase);
+
+        return string.Equals(pattern, packageId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesVersion(string? pattern, string version)
+    {
+        if (string.IsNullOrEmpty(pattern) || pattern == "*")
+            return true;
+
+        return string.Equals(pattern, version, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -7,6 +7,7 @@ namespace Horstmeier.NugetLicenses.Tests;
 public class PackageLockParserTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
+    private readonly List<string> _tempDirs = [];
     private readonly PackageLockParser _parser = new(NullLogger<PackageLockParser>.Instance);
 
     private string CreateTempLockFile(string json)
@@ -15,6 +16,20 @@ public class PackageLockParserTests : IDisposable
         File.WriteAllText(path, json);
         _tempFiles.Add(path);
         return path;
+    }
+
+    private string CreateTempDir()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(dir);
+        _tempDirs.Add(dir);
+        return dir;
+    }
+
+    private void CreateLockFile(string directory, string json)
+    {
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "packages.lock.json"), json);
     }
 
     [Fact]
@@ -133,11 +148,132 @@ public class PackageLockParserTests : IDisposable
         act.Should().Throw<FileNotFoundException>();
     }
 
+    [Fact]
+    public void ParseDirectory_FindsLockFilesRecursively()
+    {
+        var root = CreateTempDir();
+        CreateLockFile(Path.Combine(root, "projectA"), """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "PackageA": { "type": "Direct", "resolved": "1.0.0" }
+            }
+          }
+        }
+        """);
+        CreateLockFile(Path.Combine(root, "src", "projectB"), """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "PackageB": { "type": "Transitive", "resolved": "2.0.0" }
+            }
+          }
+        }
+        """);
+
+        var result = _parser.ParseDirectory(root);
+
+        result.Packages.Should().HaveCount(2);
+        result.Packages.Should().Contain(p => p.Id == "PackageA" && p.Version == "1.0.0");
+        result.Packages.Should().Contain(p => p.Id == "PackageB" && p.Version == "2.0.0");
+        result.LockFileCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void ParseDirectory_NoLockFiles_ReturnsEmpty()
+    {
+        var root = CreateTempDir();
+
+        var result = _parser.ParseDirectory(root);
+
+        result.Packages.Should().BeEmpty();
+        result.ProjectsByPackage.Should().BeEmpty();
+        result.LockFileCount.Should().Be(0);
+    }
+
+    [Fact]
+    public void ParseDirectory_DuplicateAcrossProjects_Deduplicated()
+    {
+        var root = CreateTempDir();
+        var json = """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "SharedPackage": { "type": "Direct", "resolved": "3.0.0" }
+            }
+          }
+        }
+        """;
+        CreateLockFile(Path.Combine(root, "projectA"), json);
+        CreateLockFile(Path.Combine(root, "projectB"), json);
+
+        var result = _parser.ParseDirectory(root);
+
+        result.Packages.Should().HaveCount(1);
+        result.Packages[0].Id.Should().Be("SharedPackage");
+        result.Packages[0].Version.Should().Be("3.0.0");
+    }
+
+    [Fact]
+    public void ParseDirectory_TracksProjectsPerPackage()
+    {
+        var root = CreateTempDir();
+        var sharedJson = """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "SharedPackage": { "type": "Direct", "resolved": "1.0.0" },
+              "UniqueA": { "type": "Direct", "resolved": "2.0.0" }
+            }
+          }
+        }
+        """;
+        var projectBJson = """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "SharedPackage": { "type": "Direct", "resolved": "1.0.0" },
+              "UniqueB": { "type": "Transitive", "resolved": "3.0.0" }
+            }
+          }
+        }
+        """;
+        CreateLockFile(Path.Combine(root, "projectA"), sharedJson);
+        CreateLockFile(Path.Combine(root, "projectB"), projectBJson);
+
+        var result = _parser.ParseDirectory(root);
+
+        result.Packages.Should().HaveCount(3);
+        result.LockFileCount.Should().Be(2);
+
+        var sharedKey = "sharedpackage|1.0.0";
+        result.ProjectsByPackage.Should().ContainKey(sharedKey);
+        result.ProjectsByPackage[sharedKey].Should().BeEquivalentTo("projectA", "projectB");
+
+        var uniqueAKey = "uniquea|2.0.0";
+        result.ProjectsByPackage.Should().ContainKey(uniqueAKey);
+        result.ProjectsByPackage[uniqueAKey].Should().BeEquivalentTo("projectA");
+
+        var uniqueBKey = "uniqueb|3.0.0";
+        result.ProjectsByPackage.Should().ContainKey(uniqueBKey);
+        result.ProjectsByPackage[uniqueBKey].Should().BeEquivalentTo("projectB");
+    }
+
     public void Dispose()
     {
         foreach (var file in _tempFiles)
         {
             try { File.Delete(file); }
+            catch { /* ignore cleanup errors */ }
+        }
+        foreach (var dir in _tempDirs)
+        {
+            try { Directory.Delete(dir, recursive: true); }
             catch { /* ignore cleanup errors */ }
         }
     }

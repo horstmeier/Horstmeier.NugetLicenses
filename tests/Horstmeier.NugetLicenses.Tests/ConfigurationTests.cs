@@ -25,7 +25,13 @@ public class ConfigurationTests : IDisposable
         {
           "LicenseCheck": {
             "PermittedLicenses": ["MIT", "Apache-2.0"],
-            "ExemptPackages": ["MyInternal.Pkg"],
+            "ExemptPackages": [
+              {
+                "PackageName": "MyInternal.Pkg",
+                "Version": "1.0.0",
+                "Reason": "Internal package"
+              }
+            ],
             "ProjectPath": "/some/path"
           }
         }
@@ -40,7 +46,10 @@ public class ConfigurationTests : IDisposable
         config.GetSection("LicenseCheck").Bind(settings);
 
         settings.PermittedLicenses.Should().BeEquivalentTo("MIT", "Apache-2.0");
-        settings.ExemptPackages.Should().BeEquivalentTo("MyInternal.Pkg");
+        settings.ExemptPackages.Should().HaveCount(1);
+        settings.ExemptPackages[0].PackageName.Should().Be("MyInternal.Pkg");
+        settings.ExemptPackages[0].Version.Should().Be("1.0.0");
+        settings.ExemptPackages[0].Reason.Should().Be("Internal package");
         settings.ProjectPath.Should().Be("/some/path");
     }
 
@@ -52,6 +61,8 @@ public class ConfigurationTests : IDisposable
         settings.PermittedLicenses.Should().BeEmpty();
         settings.ExemptPackages.Should().BeEmpty();
         settings.ProjectPath.Should().Be(".");
+        settings.ShowAllPackages.Should().BeFalse();
+        settings.OutputFormat.Should().Be("console");
     }
 
     [Fact]
@@ -80,6 +91,30 @@ public class ConfigurationTests : IDisposable
             settings.ProjectPath = cliPath;
 
         settings.ProjectPath.Should().Be("/cli/path");
+    }
+
+    [Fact]
+    public void Settings_BindShowAllPackagesFromJson()
+    {
+        var json = """
+        {
+          "LicenseCheck": {
+            "ShowAllPackages": true,
+            "OutputFormat": "markdown"
+          }
+        }
+        """;
+
+        var path = CreateTempJsonFile(json);
+        var config = new ConfigurationBuilder()
+            .AddJsonFile(path)
+            .Build();
+
+        var settings = new LicenseCheckSettings();
+        config.GetSection("LicenseCheck").Bind(settings);
+
+        settings.ShowAllPackages.Should().BeTrue();
+        settings.OutputFormat.Should().Be("markdown");
     }
 
     public void Dispose()

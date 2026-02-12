@@ -9,7 +9,19 @@ namespace Horstmeier.NugetLicenses.Tests;
 [Trait("Category", "Integration")]
 public class NuGetLicenseResolverTests
 {
-    private readonly NuGetLicenseResolver _resolver = new(new LicenseCheckSettings(), NullLogger<NuGetLicenseResolver>.Instance);
+    private readonly NuGetLicenseResolver _resolver;
+
+    public NuGetLicenseResolverTests()
+    {
+        var httpFactory = new DefaultHttpClientFactory();
+        var analyzer = new LicenseFileAnalyzer(httpFactory, NullLogger<LicenseFileAnalyzer>.Instance);
+        _resolver = new NuGetLicenseResolver(new LicenseCheckSettings(), analyzer, NullLogger<NuGetLicenseResolver>.Instance);
+    }
+
+    private class DefaultHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
 
     [Fact]
     public async Task ResolveAsync_KnownPackageWithSpdx_ReturnsLicenseExpression()

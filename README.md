@@ -1,6 +1,6 @@
 # Horstmeier.NugetLicenses
 
-A .NET console application that reads a project's `packages.lock.json`, resolves NuGet package licenses via the NuGet v3 API, and validates them against a configurable list of permitted SPDX licenses. Returns exit code 1 if any non-exempt package has a disallowed or missing license.
+A .NET console application that recursively scans a directory for `packages.lock.json` files, resolves NuGet package licenses via the NuGet v3 API, and validates them against a configurable list of permitted SPDX licenses. Returns exit code 1 if any non-exempt package has a disallowed or missing license.
 
 ## Requirements
 
@@ -13,11 +13,15 @@ A .NET console application that reads a project's `packages.lock.json`, resolves
 # Run against the current directory
 dotnet run --project src/Horstmeier.NugetLicenses
 
-# Run against a specific project path
-dotnet run --project src/Horstmeier.NugetLicenses -- --ProjectPath=/path/to/your/project
+# Run against a specific project path (scans recursively for packages.lock.json files)
+dotnet run --project src/Horstmeier.NugetLicenses -- --ProjectPath=/path/to/your/solution
 
-# Dump all packages and their licenses to the console
-dotnet run --project src/Horstmeier.NugetLicenses -- --DumpPackages
+# Show all packages (not just violations)
+dotnet run --project src/Horstmeier.NugetLicenses -- --ShowAllPackages
+
+# Output as markdown or JSON
+dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=markdown
+dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=json
 ```
 
 Exit codes:
@@ -47,8 +51,16 @@ Configuration is layered (later sources override earlier ones):
       "Unlicense",
       "0BSD"
     ],
-    "ExemptPackages": [],
-    "ProjectPath": "."
+    "ExemptPackages": [
+      {
+        "PackageName": "Example.Package",
+        "Version": "1.0.0",
+        "Reason": "Manually reviewed and approved"
+      }
+    ],
+    "ProjectPath": ".",
+    "ShowAllPackages": false,
+    "OutputFormat": "console"
   }
 }
 ```
@@ -56,9 +68,11 @@ Configuration is layered (later sources override earlier ones):
 | Setting | Description |
 |---|---|
 | `PermittedLicenses` | SPDX license identifiers that are allowed |
-| `ExemptPackages` | Package IDs to skip validation entirely (case-insensitive) |
-| `ProjectPath` | Directory containing `packages.lock.json` |
-| `DumpPackages` | Print a table of all packages with their resolved licenses to the console |
+| `ExemptPackages` | Packages to skip validation (see [Exempt Packages](#exempt-packages)) |
+| `ProjectPath` | Root directory to scan recursively for `packages.lock.json` files |
+| `ShowAllPackages` | When `true`, include all packages in the report (not just violations) |
+| `OutputFormat` | Report format: `console` (default), `markdown`, or `json` |
+| `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`) |
 
 ### Environment variables
 
@@ -72,8 +86,69 @@ export LICENSECHECK_LicenseCheck__ProjectPath=/path/to/project
 
 ```bash
 dotnet run -- --ProjectPath=/path/to/project
-dotnet run -- --DumpPackages
+dotnet run -- --ShowAllPackages
+dotnet run -- --OutputFormat=json
 ```
+
+## Directory Scanning
+
+The tool recursively scans the configured `ProjectPath` for all `packages.lock.json` files. This means you can point it at a solution root and it will discover packages from all projects at once.
+
+- Packages are deduplicated across lock files (by lowercase ID + version)
+- Violations report which project(s) reference the offending package
+- The summary shows how many lock files were found and how many unique packages were resolved
+
+## Exempt Packages
+
+Packages can be exempted from validation via the `ExemptPackages` configuration. Each entry has:
+
+| Field | Description |
+|---|---|
+| `PackageName` | Package ID to exempt. Supports trailing wildcard (`*`) for prefix matching (e.g. `System.*` exempts all `System.` packages) |
+| `Version` | Specific version to exempt, `*` for any version, or omit/null for any version |
+| `Reason` | Optional explanation for the exemption |
+
+```json
+{
+  "ExemptPackages": [
+    { "PackageName": "System.*", "Reason": "Framework packages" },
+    { "PackageName": "My.Internal.Lib", "Version": "2.0.0", "Reason": "Reviewed by legal" }
+  ]
+}
+```
+
+## Output Formats
+
+The `OutputFormat` setting controls the report format:
+
+- **`console`** (default) — tabular text output with a summary line
+- **`markdown`** — structured markdown with separate Violations and Valid Packages tables
+- **`json`** — machine-readable JSON with summary, violations, and (when `ShowAllPackages` is enabled) a full package list
+
+## License File Heuristic Fallback
+
+When a NuGet package has no SPDX license expression in its metadata, the tool attempts to identify the license automatically before flagging it as a violation:
+
+1. **URL pattern matching** — URLs like `https://licenses.nuget.org/MIT` are recognized and the SPDX identifier is extracted directly.
+2. **Content fingerprinting** — The license URL is fetched and the text is matched against known license fingerprints (case-insensitive).
+
+Supported licenses for content detection:
+
+| SPDX ID | Detection method |
+|---|---|
+| MIT | "permission is hereby granted, free of charge" |
+| Apache-2.0 | "apache license" + "version 2.0" |
+| BSD-2-Clause | BSD redistribution clause without "neither the name" |
+| BSD-3-Clause | BSD redistribution clause with "neither the name" |
+| ISC | "permission to use, copy, modify, and/or distribute" |
+| Unlicense | "this is free and unencumbered software" |
+| MS-PL | "microsoft public license" |
+| MPL-2.0 | "mozilla public license" + "version 2.0" |
+| LGPL-2.1 | "gnu lesser general public license" + "version 2.1" |
+| GPL-2.0 | "gnu general public license" + "version 2" |
+| GPL-3.0 | "gnu general public license" + "version 3" |
+
+If the URL is unreachable (timeout, HTTP error, non-text content) or the text doesn't match any known license, the package is still reported as having no license expression.
 
 ## SPDX Expression Handling
 
@@ -82,6 +157,7 @@ The validator supports compound SPDX license expressions:
 - **OR** — at least one branch must be a permitted license (`MIT OR GPL-3.0` passes if `MIT` is permitted)
 - **AND** — all parts must be permitted licenses (`MIT AND Apache-2.0` requires both to be permitted)
 - **Parentheses** — nested expressions like `(MIT AND Apache-2.0) OR GPL-3.0` are evaluated correctly
+- **WITH** — exception clauses are stripped before matching (`Apache-2.0 WITH LLVM-exception` is checked as `Apache-2.0`)
 
 ## Project Structure
 
@@ -91,7 +167,7 @@ Horstmeier.NugetLicenses/
     Horstmeier.NugetLicenses/          Console application
       Configuration/                   Settings POCO
       Models/                          PackageReference, LicenseInfo, LicenseValidationResult
-      Services/                        Parser, resolver, validator with interfaces
+      Services/                        Parser, resolver, validator, license file analyzer with interfaces
   tests/
     Horstmeier.NugetLicenses.Tests/    xUnit tests
 ```
