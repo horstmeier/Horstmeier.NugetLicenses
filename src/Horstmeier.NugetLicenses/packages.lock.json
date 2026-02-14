@@ -79,6 +79,12 @@
           "Microsoft.Extensions.Options": "10.0.3"
         }
       },
+      "MinVer": {
+        "type": "Direct",
+        "requested": "[6.1.0, )",
+        "resolved": "6.1.0",
+        "contentHash": "dGyb6EBQ87AhyagcXslfDGL/A+xbNtRD23CBjXoKo82TvjHqF2BBz61B6EBx/S117KUMB1PEUpRLrHcu6UjOhg=="
+      },
       "NuGet.Protocol": {
         "type": "Direct",
         "requested": "[7.3.0, )",
