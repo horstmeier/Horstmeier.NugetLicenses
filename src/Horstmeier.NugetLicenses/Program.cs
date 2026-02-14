@@ -21,7 +21,7 @@ var showAllPackagesOption = new Option<bool>(
 
 var outputFormatOption = new Option<string>(
     aliases: ["--output-format", "-o"],
-    description: "Report format: console (default), markdown, or json",
+    description: "Report format: console (default), markdown, html, or json",
     getDefaultValue: () => "console");
 
 var quietOption = new Option<bool>(

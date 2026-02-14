@@ -17,7 +17,7 @@ public class CommandLineOptions
     public bool? ShowAllPackages { get; set; }
 
     /// <summary>
-    /// Report format: console, markdown, or json.
+    /// Report format: console, markdown, html, or json.
     /// </summary>
     public string? OutputFormat { get; set; }
 

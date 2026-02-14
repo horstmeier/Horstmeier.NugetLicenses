@@ -87,16 +87,16 @@ Configuration is layered (later sources override earlier ones):
 }
 ```
 
-| Setting | Description |
-|---|---|
-| `PermittedLicenses` | SPDX license identifiers that are allowed |
-| `ExemptPackages` | Packages to skip validation (see [Exempt Packages](#exempt-packages)) |
-| `ProjectPath` | Root directory to scan recursively for `packages.lock.json` files |
-| `ShowAllPackages` | When `true`, include all packages in the report (not just violations) |
-| `OutputFormat` | Report format: `console` (default), `markdown`, or `json` |
-| `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`) |
-| `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs |
-| `CacheDurationDays` | Number of days to keep cached license information (default: 7) |
+| Setting | Description                                                                                 |
+|---|---------------------------------------------------------------------------------------------|
+| `PermittedLicenses` | SPDX license identifiers that are allowed                                                   |
+| `ExemptPackages` | Packages to skip validation (see [Exempt Packages](#exempt-packages))                       |
+| `ProjectPath` | Root directory to scan recursively for `packages.lock.json` files                           |
+| `ShowAllPackages` | When `true`, include all packages in the report (not just violations)                       |
+| `OutputFormat` | Report format: `console` (default), `markdown`, `html`, or `json`                           |
+| `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`)                    |
+| `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs        |
+| `CacheDurationDays` | Number of days to keep cached license information (default: 7)                              |
 | `EnableLicenseFileHeuristics` | When `true`, enables heuristics for license detection from license files (default: `false`) |
 
 ### Environment variables
