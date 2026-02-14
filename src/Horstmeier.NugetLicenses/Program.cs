@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Horstmeier.NugetLicenses.Configuration;
+using Horstmeier.NugetLicenses.Logging;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Configuration;
@@ -39,6 +40,10 @@ var nugetSourceOption = new Option<string?>(
     aliases: ["--nuget-source"],
     description: "NuGet v3 API source URL");
 
+var enableLicenseHeuristicsOption = new Option<bool>(
+    aliases: ["--enable-license-heuristics"],
+    description: "Enable license file heuristics to identify unknown licenses from URLs (disabled by default)");
+
 rootCommand.AddOption(projectPathOption);
 rootCommand.AddOption(showAllPackagesOption);
 rootCommand.AddOption(outputFormatOption);
@@ -46,19 +51,20 @@ rootCommand.AddOption(quietOption);
 rootCommand.AddOption(disableCacheOption);
 rootCommand.AddOption(cacheDurationOption);
 rootCommand.AddOption(nugetSourceOption);
+rootCommand.AddOption(enableLicenseHeuristicsOption);
 
 // Add validation for output format
 outputFormatOption.AddValidator(result =>
 {
     var value = result.GetValueOrDefault<string>();
-    if (value != null && !new[] { "console", "markdown", "json" }.Contains(value.ToLowerInvariant()))
+    if (value != null && !new[] { "console", "markdown", "json", "html" }.Contains(value.ToLowerInvariant()))
     {
-        result.ErrorMessage = "Output format must be one of: console, markdown, json";
+        result.ErrorMessage = "Output format must be one of: console, markdown, json, html";
     }
 });
 
 CommandLineOptions? cliOptions = null;
-rootCommand.SetHandler((projectPath, showAll, format, quiet, disableCache, cacheDays, nugetSource) =>
+rootCommand.SetHandler((projectPath, showAll, format, quiet, disableCache, cacheDays, nugetSource, enableHeuristics) =>
 {
     cliOptions = new CommandLineOptions
     {
@@ -68,11 +74,12 @@ rootCommand.SetHandler((projectPath, showAll, format, quiet, disableCache, cache
         Quiet = quiet ? true : null,
         DisableCache = disableCache ? true : null,
         CacheDurationDays = cacheDays,
-        NuGetSource = nugetSource
+        NuGetSource = nugetSource,
+        EnableLicenseFileHeuristics = enableHeuristics
     };
 },
 projectPathOption, showAllPackagesOption, outputFormatOption, quietOption,
-disableCacheOption, cacheDurationOption, nugetSourceOption);
+disableCacheOption, cacheDurationOption, nugetSourceOption, enableLicenseHeuristicsOption);
 
 var parseResult = await rootCommand.InvokeAsync(args);
 
@@ -101,7 +108,7 @@ if (!Directory.Exists(settings.ProjectPath))
     Console.Error.WriteLine($"Warning: Project path does not exist: {Path.GetFullPath(settings.ProjectPath)}");
 
 var serviceCollection = new ServiceCollection()
-    .AddLogging(b => b.AddConsole().SetMinimumLevel(quiet ? LogLevel.Warning : LogLevel.Information))
+    .AddLogging(b => b.AddStderrConsole().SetMinimumLevel(quiet ? LogLevel.Warning : LogLevel.Information))
     .AddHttpClient()
     .AddSingleton(settings)
     .AddSingleton<IProjectFileParser, ProjectFileParser>()
@@ -183,6 +190,7 @@ static bool MergeSettings(LicenseCheckSettings settings, CommandLineOptions cli)
     if (cli.DisableCache != null) settings.EnableCache = !cli.DisableCache.Value;
     if (cli.CacheDurationDays != null) settings.CacheDurationDays = cli.CacheDurationDays.Value;
     if (cli.NuGetSource != null) settings.NuGetSource = cli.NuGetSource;
+    if (cli.EnableLicenseFileHeuristics != null) settings.EnableLicenseFileHeuristics = cli.EnableLicenseFileHeuristics.Value;
     
     return cli.Quiet ?? false;
 }

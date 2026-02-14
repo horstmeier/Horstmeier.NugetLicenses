@@ -16,6 +16,7 @@ public class NuGetLicenseResolver : ILicenseResolver
     private readonly ILicenseFileAnalyzer _analyzer;
     private readonly ILicenseCache? _cache;
     private readonly string _nuGetSource;
+    private readonly bool _enableLicenseFileHeuristics;
 
     public NuGetLicenseResolver(
         LicenseCheckSettings settings, 
@@ -27,6 +28,7 @@ public class NuGetLicenseResolver : ILicenseResolver
         _analyzer = analyzer;
         _logger = logger;
         _cache = cache;
+        _enableLicenseFileHeuristics = settings.EnableLicenseFileHeuristics;
     }
 
     public async Task<IReadOnlyList<LicenseInfo>> ResolveAsync(
@@ -86,7 +88,7 @@ public class NuGetLicenseResolver : ILicenseResolver
                     var licenseExpression = metadata.LicenseMetadata?.LicenseExpression?.ToString();
                     var licenseUrl = metadata.LicenseUrl?.ToString();
 
-                    if (string.IsNullOrEmpty(licenseExpression) && !string.IsNullOrEmpty(licenseUrl))
+                    if (_enableLicenseFileHeuristics && string.IsNullOrEmpty(licenseExpression) && !string.IsNullOrEmpty(licenseUrl))
                     {
                         var detected = await _analyzer.TryIdentifyFromUrlAsync(licenseUrl, ct);
                         if (detected is not null)

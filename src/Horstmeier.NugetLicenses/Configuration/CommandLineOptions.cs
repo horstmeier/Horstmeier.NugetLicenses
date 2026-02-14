@@ -40,4 +40,9 @@ public class CommandLineOptions
     /// NuGet v3 API source URL.
     /// </summary>
     public string? NuGetSource { get; set; }
+
+    /// <summary>
+    /// Enable license file heuristics to identify unknown licenses from URLs.
+    /// </summary>
+    public bool? EnableLicenseFileHeuristics { get; set; }
 }

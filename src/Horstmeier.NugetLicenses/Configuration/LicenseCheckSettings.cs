@@ -10,4 +10,5 @@ public class LicenseCheckSettings
     public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";
     public bool EnableCache { get; set; } = true;
     public int CacheDurationDays { get; set; } = 365;
+    public bool EnableLicenseFileHeuristics { get; set; } = false;
 }

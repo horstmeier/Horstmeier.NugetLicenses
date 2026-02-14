@@ -31,6 +31,7 @@ dotnet run --project src/Horstmeier.NugetLicenses -- -a
 # Output as markdown or JSON
 dotnet run --project src/Horstmeier.NugetLicenses -- --output-format markdown
 dotnet run --project src/Horstmeier.NugetLicenses -- -o json
+dotnet run --project src/Horstmeier.NugetLicenses -- -o html
 
 # Quiet mode — suppress info logging, only output the report
 dotnet run --project src/Horstmeier.NugetLicenses -- --quiet
@@ -80,7 +81,8 @@ Configuration is layered (later sources override earlier ones):
     ],
     "ProjectPath": ".",
     "ShowAllPackages": false,
-    "OutputFormat": "console"
+    "OutputFormat": "console",
+    "EnableLicenseFileHeuristics": false
   }
 }
 ```
@@ -95,6 +97,7 @@ Configuration is layered (later sources override earlier ones):
 | `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`) |
 | `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs |
 | `CacheDurationDays` | Number of days to keep cached license information (default: 7) |
+| `EnableLicenseFileHeuristics` | When `true`, enables heuristics for license detection from license files (default: `false`) |
 
 ### Environment variables
 
@@ -116,6 +119,7 @@ Available options:
 - `--disable-cache` — Disable local license caching (caching is enabled by default)
 - `--cache-duration-days <days>` — Cache duration in days
 - `--nuget-source <url>` — Custom NuGet API URL
+- `--enable-license-heuristics` — Enable license file heuristics to identify unknown licenses from URLs
 
 Examples:
 ```bash
@@ -123,6 +127,7 @@ nuget-licenses --project-path /path/to/project
 nuget-licenses -p /path/to/project --show-all-packages
 nuget-licenses --output-format json --quiet
 nuget-licenses --disable-cache
+nuget-licenses --enable-license-heuristics
 ```
 
 ## License Cache
@@ -233,15 +238,67 @@ The `OutputFormat` setting controls the report format:
 - **`console`** (default) — tabular text output with a summary line
 - **`markdown`** — structured markdown with separate Violations and Valid Packages tables
 - **`json`** — machine-readable JSON with summary, violations, and (when `ShowAllPackages` is enabled) a full package list
+- **`html`** — responsive HTML report with styled tables
+  - Professional design with modern aesthetics
+  - Blue color scheme with hover effects
+  - Violations highlighted with yellow background
+  - Tables with striped hover state for better readability
+  - Responsive layout that works on desktop and mobile
+  - Proper HTML encoding for security
+
+### HTML Report Features
+
+The HTML report includes:
+- Clean, professional styling using modern CSS
+- Summary card with violation count
+- Separate sections for violations and valid packages
+- Project information table (if available)
+- Optimized for printing (can be printed to PDF)
+- Self-contained (no external dependencies)
+
+**Example usage:**
+```bash
+# Generate HTML report
+nuget-licenses --output-format html > license-report.html
+
+# Open in browser
+open license-report.html
+
+# Or save to specific location
+nuget-licenses -o html --project-path /path > reports/licenses.html
+```
 
 ## License File Heuristic Fallback
 
-When a NuGet package has no SPDX license expression in its metadata, the tool attempts to identify the license automatically before flagging it as a violation:
+**This feature is disabled by default.** To enable it, set `EnableLicenseFileHeuristics` to `true` in configuration or use the `--enable-license-heuristics` command-line option.
+
+When enabled and a NuGet package has no SPDX license expression in its metadata, the tool attempts to identify the license automatically from the license file URL before flagging it as a violation:
 
 1. **URL pattern matching** — URLs like `https://licenses.nuget.org/MIT` are recognized and the SPDX identifier is extracted directly.
 2. **Content fingerprinting** — The license URL is fetched and the text is matched against known license fingerprints (case-insensitive).
 
-Supported licenses for content detection:
+### Enabling License File Heuristics
+
+Via configuration file:
+```json
+{
+  "LicenseCheck": {
+    "EnableLicenseFileHeuristics": true
+  }
+}
+```
+
+Via environment variable:
+```bash
+export LICENSECHECK_LicenseCheck__EnableLicenseFileHeuristics=true
+```
+
+Via command-line:
+```bash
+nuget-licenses --enable-license-heuristics
+```
+
+### Supported Licenses for Content Detection
 
 | SPDX ID | Detection method |
 |---|---|
