@@ -112,33 +112,27 @@ outputFormatOption.Validators.Add(result =>
 
 CommandLineOptions? cliOptions = null;
 
-rootCommand.SetAction((pr, _) =>
-{
-    
-    var projectPath = pr.GetValue(projectPathOption)!;
-    var format = pr.GetValue(outputFormatOption)!;
-    cliOptions = new CommandLineOptions
-    {
-        ProjectPath = projectPath != "." ? projectPath : null,
-        ShowAllPackages = pr.GetValue(showAllPackagesOption) ? true : null,
-        OutputFormat = format != "console" ? format : null,
-        Quiet = pr.GetValue(quietOption) ? true : null,
-        DisableCache = pr.GetValue(disableCacheOption) ? true : null,
-        CacheDurationDays = pr.GetValue(cacheDurationOption),
-        NuGetSource = pr.GetValue(nugetSourceOption),
-        EnableLicenseFileHeuristics = pr.GetValue(enableLicenseHeuristicsOption),
-        ConfigFile = pr.GetValue(configFileOption),
-        CheckUpdates = pr.GetValue(checkUpdatesOption) ? true : null,
-        CheckUpdatesAll = pr.GetValue(checkUpdatesAllOption) ? true : null,
-        NuGetApiKey = pr.GetValue(nugetApiKeyOption),
-        CacheDir = pr.GetValue(cacheDirOption),
-        RequireLockFiles = pr.GetValue(requireLockFilesOption) ? true : null
-    };
-
-    return Task.CompletedTask;
-});
-
+// parse arguments
 var parseResult = rootCommand.Parse(args);
+
+cliOptions = new CommandLineOptions
+{
+    ProjectPath = parseResult.GetValue(projectPathOption) != "." ? parseResult.GetValue(projectPathOption) : null,
+    ShowAllPackages = parseResult.GetValue(showAllPackagesOption) ? true : null,
+    OutputFormat = parseResult.GetValue(outputFormatOption) != "console" ? parseResult.GetValue(outputFormatOption) : null,
+    Quiet = parseResult.GetValue(quietOption) ? true : null,
+    DisableCache = parseResult.GetValue(disableCacheOption) ? true : null,
+    CacheDurationDays = parseResult.GetValue(cacheDurationOption),
+    NuGetSource = parseResult.GetValue(nugetSourceOption),
+    EnableLicenseFileHeuristics = parseResult.GetValue(enableLicenseHeuristicsOption),
+    ConfigFile = parseResult.GetValue(configFileOption),
+    CheckUpdates = parseResult.GetValue(checkUpdatesOption) ? true : null,
+    CheckUpdatesAll = parseResult.GetValue(checkUpdatesAllOption) ? true : null,
+    NuGetApiKey = parseResult.GetValue(nugetApiKeyOption),
+    CacheDir = parseResult.GetValue(cacheDirOption),
+    RequireLockFiles = parseResult.GetValue(requireLockFilesOption) ? true : null
+};
+
 var retCode = await parseResult.InvokeAsync();
 // If parsing failed or help was shown, exit early
 if (retCode != 0 || cliOptions == null)

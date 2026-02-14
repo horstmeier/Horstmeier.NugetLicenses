@@ -3,5 +3,15 @@
     "MIT",
     "Apache-2.0",
     "BSD-3-Clause"
+  ],
+  "exemptPackages": [
+    {
+      "id": "horstmeier.nugetlicenses",
+      "reason": "Local project reference"
+    },
+    {
+      "id": "xunit.abstractions",
+      "reason": "xUnit.net is licensed under Apache 2.0"
+    }
   ]
 }
