@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        #os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
+        dotnet-version: [10.0.x]
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            ~/.local/share/NuGet/Cache
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore
+        run: dotnet restore "Horstmeier.NugetLicenses.slnx" --use-lock-file
+
+      - name: Build
+        run: dotnet build "Horstmeier.NugetLicenses.slnx" --configuration Release --no-restore --verbosity minimal
+
+      - name: Run tests
+        run: dotnet test "Horstmeier.NugetLicenses.slnx" --configuration Release --no-build --verbosity normal
+
+      - name: Run license validation (self-check)
+        # Execute the already-built tool without rebuilding; fail the job if the tool reports violations (non-zero exit code)
+        run: |
+          # Prefer running the built binary if present in Release output; fallback to `dotnet run --no-build`.
+          if [ -f "src/Horstmeier.NugetLicenses/bin/Release/net*/Horstmeier.NugetLicenses.dll" ]; then
+            dll=$(ls src/Horstmeier.NugetLicenses/bin/Release/net*/Horstmeier.NugetLicenses.dll | head -n 1)
+            echo "Running built tool: $dll"
+            dotnet "$dll" --project-path . --output-format json
+          else
+            echo "Built binary not found, using dotnet run --no-build"
+            dotnet run --project src/Horstmeier.NugetLicenses --no-build -- --project-path . --output-format json
+          fi
+
+      - name: Pack (tool verification)
+        if: always()
+        run: dotnet pack src/Horstmeier.NugetLicenses/Horstmeier.NugetLicenses.csproj -c Release -o ./artifacts --no-build
+
