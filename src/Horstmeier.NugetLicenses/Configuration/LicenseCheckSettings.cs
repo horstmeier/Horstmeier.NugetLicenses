@@ -11,4 +11,6 @@ public class LicenseCheckSettings
     public bool EnableCache { get; set; } = true;
     public int CacheDurationDays { get; set; } = 365;
     public bool EnableLicenseFileHeuristics { get; set; } = false;
+    public bool CheckUpdates { get; set; } = false;
+    public bool CheckUpdatesAll { get; set; } = false;
 }

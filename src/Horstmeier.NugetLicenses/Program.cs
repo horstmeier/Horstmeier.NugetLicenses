@@ -50,6 +50,14 @@ var configFileOption = new Option<string?>(
                  "config files (global and project-level). Only built-in defaults, this file, " +
                  "environment variables, and CLI options apply.");
 
+var checkUpdatesOption = new Option<bool>(
+    aliases: ["--check-updates"],
+    description: "Check for newer stable versions of direct dependencies");
+
+var checkUpdatesAllOption = new Option<bool>(
+    aliases: ["--check-updates-all"],
+    description: "Check for newer stable versions of all packages, including transitive dependencies");
+
 rootCommand.AddOption(projectPathOption);
 rootCommand.AddOption(showAllPackagesOption);
 rootCommand.AddOption(outputFormatOption);
@@ -59,6 +67,8 @@ rootCommand.AddOption(cacheDurationOption);
 rootCommand.AddOption(nugetSourceOption);
 rootCommand.AddOption(enableLicenseHeuristicsOption);
 rootCommand.AddOption(configFileOption);
+rootCommand.AddOption(checkUpdatesOption);
+rootCommand.AddOption(checkUpdatesAllOption);
 
 // Add validation for output format
 outputFormatOption.AddValidator(result =>
@@ -86,7 +96,9 @@ rootCommand.SetHandler(ctx =>
         CacheDurationDays = pr.GetValueForOption(cacheDurationOption),
         NuGetSource = pr.GetValueForOption(nugetSourceOption),
         EnableLicenseFileHeuristics = pr.GetValueForOption(enableLicenseHeuristicsOption),
-        ConfigFile = pr.GetValueForOption(configFileOption)
+        ConfigFile = pr.GetValueForOption(configFileOption),
+        CheckUpdates = pr.GetValueForOption(checkUpdatesOption) ? true : null,
+        CheckUpdatesAll = pr.GetValueForOption(checkUpdatesAllOption) ? true : null
     };
 });
 
@@ -168,6 +180,7 @@ if (settings.EnableCache)
     serviceCollection.AddSingleton<ILicenseCache, LicenseCache>();
 
 serviceCollection.AddSingleton<ILicenseResolver, NuGetLicenseResolver>();
+serviceCollection.AddSingleton<IVersionChecker, VersionChecker>();
 
 var services = serviceCollection.BuildServiceProvider();
 
@@ -175,6 +188,7 @@ var parser = services.GetRequiredService<IPackageLockParser>();
 var resolver = services.GetRequiredService<ILicenseResolver>();
 var validator = services.GetRequiredService<ILicenseValidator>();
 var reportGenerator = services.GetRequiredService<IReportGenerator>();
+var versionChecker = services.GetRequiredService<IVersionChecker>();
 
 if (!quiet)
     Console.Error.WriteLine($"Scanning for project files under: {Path.GetFullPath(settings.ProjectPath)}");
@@ -196,6 +210,18 @@ if (!quiet)
 
 var validationResult = validator.Validate(licenses);
 
+// Check for outdated packages if requested
+Dictionary<string, VersionCheckResult> versionCheckMap = [];
+if (settings.CheckUpdates)
+{
+    if (!quiet)
+        Console.Error.WriteLine("Checking for package updates...");
+    var versionResults = await versionChecker.CheckAsync(scanResult.Packages, settings.CheckUpdatesAll);
+    versionCheckMap = versionResults.ToDictionary(
+        r => $"{r.PackageId.ToLowerInvariant()}|{r.CurrentVersion.ToLowerInvariant()}",
+        StringComparer.OrdinalIgnoreCase);
+}
+
 // Build report entries
 var violationMap = validationResult.Violations.ToDictionary(
     v => $"{v.PackageId.ToLowerInvariant()}|{v.Version.ToLowerInvariant()}",
@@ -210,6 +236,7 @@ foreach (var license in licenses)
     var licenseDisplay = license.LicenseExpression ?? license.LicenseUrl ?? "(unknown)";
 
     scanResult.ProjectsByPackage.TryGetValue(key, out var projects);
+    versionCheckMap.TryGetValue(key, out var versionCheck);
 
     if (isViolation || settings.ShowAllPackages)
     {
@@ -219,7 +246,9 @@ foreach (var license in licenses)
             licenseDisplay,
             isViolation,
             violation?.Reason,
-            isViolation ? projects ?? [] : []));
+            projects ?? [],
+            versionCheck?.LatestVersion,
+            versionCheck?.IsOutdated ?? false));
     }
 }
 
@@ -237,6 +266,11 @@ static bool MergeSettings(LicenseCheckSettings settings, CommandLineOptions cli)
     if (cli.CacheDurationDays != null) settings.CacheDurationDays = cli.CacheDurationDays.Value;
     if (cli.NuGetSource != null) settings.NuGetSource = cli.NuGetSource;
     if (cli.EnableLicenseFileHeuristics != null) settings.EnableLicenseFileHeuristics = cli.EnableLicenseFileHeuristics.Value;
-    
+    if (cli.CheckUpdates != null) settings.CheckUpdates = cli.CheckUpdates.Value;
+    if (cli.CheckUpdatesAll != null) settings.CheckUpdatesAll = cli.CheckUpdatesAll.Value;
+
+    // --check-updates-all implies --check-updates
+    if (settings.CheckUpdatesAll) settings.CheckUpdates = true;
+
     return cli.Quiet ?? false;
 }

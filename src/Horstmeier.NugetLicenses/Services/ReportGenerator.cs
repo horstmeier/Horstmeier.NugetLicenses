@@ -31,21 +31,37 @@ public class ReportGenerator : IReportGenerator
         IReadOnlyList<ProjectInfo>? projects)
     {
         var sb = new StringBuilder();
+        var showUpdates = entries.Any(e => e.LatestVersion != null);
 
         if (entries.Count > 0)
         {
-            sb.AppendLine($"{"Package",-50} {"Version",-15} {"License",-30}");
-            sb.AppendLine(new string('-', 95));
+            if (showUpdates)
+            {
+                sb.AppendLine($"{"Package",-50} {"Version",-15} {"License",-30} {"Status",-6} {"Latest",-15}");
+                sb.AppendLine(new string('-', 119));
+            }
+            else
+            {
+                sb.AppendLine($"{"Package",-50} {"Version",-15} {"License",-30} {"Status",-6}");
+                sb.AppendLine(new string('-', 103));
+            }
 
             foreach (var entry in entries.OrderBy(e => e.PackageId))
             {
-                sb.AppendLine($"{entry.PackageId,-50} {entry.Version,-15} {entry.License,-30}");
-                if (entry.IsViolation)
+                var status = entry.IsViolation ? "FAIL" : "OK";
+                if (showUpdates)
                 {
-                    sb.AppendLine($"  Reason: {entry.Reason}");
-                    if (entry.Projects.Count > 0)
-                        sb.AppendLine($"  Projects: {string.Join(", ", entry.Projects)}");
+                    var latest = FormatLatestConsole(entry);
+                    sb.AppendLine($"{entry.PackageId,-50} {entry.Version,-15} {entry.License,-30} {status,-6} {latest,-15}");
                 }
+                else
+                {
+                    sb.AppendLine($"{entry.PackageId,-50} {entry.Version,-15} {entry.License,-30} {status,-6}");
+                }
+                if (entry.IsViolation)
+                    sb.AppendLine($"  Reason: {entry.Reason}");
+                if (entry.Projects.Count > 0)
+                    sb.AppendLine($"  Projects: {string.Join(", ", entry.Projects)}");
             }
 
             sb.AppendLine();
@@ -69,6 +85,13 @@ public class ReportGenerator : IReportGenerator
         return sb.ToString().TrimEnd();
     }
 
+    private static string FormatLatestConsole(PackageReportEntry entry)
+    {
+        if (entry.LatestVersion == null)
+            return string.Empty;
+        return entry.IsOutdated ? $"-> {entry.LatestVersion}" : "current";
+    }
+
     private static string GenerateMarkdown(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
         IReadOnlyList<ProjectInfo>? projects)
     {
@@ -77,6 +100,7 @@ public class ReportGenerator : IReportGenerator
 
         var violations = entries.Where(e => e.IsViolation).OrderBy(e => e.PackageId).ToList();
         var valid = entries.Where(e => !e.IsViolation).OrderBy(e => e.PackageId).ToList();
+        var showUpdates = entries.Any(e => e.LatestVersion != null);
 
         if (violations.Count > 0)
         {
@@ -97,11 +121,26 @@ public class ReportGenerator : IReportGenerator
             sb.AppendLine();
             sb.AppendLine("## Valid Packages");
             sb.AppendLine();
-            sb.AppendLine("| Package | Version | License |");
-            sb.AppendLine("|---------|---------|---------|");
-            foreach (var entry in valid)
+            if (showUpdates)
             {
-                sb.AppendLine($"| {entry.PackageId} | {entry.Version} | {entry.License} |");
+                sb.AppendLine("| Package | Version | Latest | License | Projects |");
+                sb.AppendLine("|---------|---------|--------|---------|----------|");
+                foreach (var entry in valid)
+                {
+                    var latest = FormatLatestMarkdown(entry);
+                    var projectList = string.Join(", ", entry.Projects);
+                    sb.AppendLine($"| {entry.PackageId} | {entry.Version} | {latest} | {entry.License} | {projectList} |");
+                }
+            }
+            else
+            {
+                sb.AppendLine("| Package | Version | License | Projects |");
+                sb.AppendLine("|---------|---------|---------|----------|");
+                foreach (var entry in valid)
+                {
+                    var projectList = string.Join(", ", entry.Projects);
+                    sb.AppendLine($"| {entry.PackageId} | {entry.Version} | {entry.License} | {projectList} |");
+                }
             }
         }
 
@@ -126,10 +165,18 @@ public class ReportGenerator : IReportGenerator
         return sb.ToString().TrimEnd();
     }
 
+    private static string FormatLatestMarkdown(PackageReportEntry entry)
+    {
+        if (entry.LatestVersion == null)
+            return string.Empty;
+        return entry.IsOutdated ? $"→ {entry.LatestVersion}" : "✓";
+    }
+
     private string GenerateJson(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
         IReadOnlyList<ProjectInfo>? projects)
     {
         var violations = entries.Where(e => e.IsViolation).ToList();
+        var showUpdates = entries.Any(e => e.LatestVersion != null);
 
         var obj = new Dictionary<string, object>
         {
@@ -145,7 +192,9 @@ public class ReportGenerator : IReportGenerator
                 version = e.Version,
                 license = e.License,
                 reason = e.Reason,
-                projects = e.Projects
+                projects = e.Projects,
+                latestVersion = showUpdates ? e.LatestVersion : null,
+                isOutdated = showUpdates ? (bool?)e.IsOutdated : null
             }).ToList()
         };
 
@@ -158,7 +207,9 @@ public class ReportGenerator : IReportGenerator
                 license = e.License,
                 isViolation = e.IsViolation,
                 reason = e.Reason,
-                projects = e.Projects
+                projects = e.Projects,
+                latestVersion = showUpdates ? e.LatestVersion : null,
+                isOutdated = showUpdates ? (bool?)e.IsOutdated : null
             }).ToList();
         }
 
@@ -185,6 +236,8 @@ public class ReportGenerator : IReportGenerator
         IReadOnlyList<ProjectInfo>? projects)
     {
         var sb = new StringBuilder();
+        var showUpdates = entries.Any(e => e.LatestVersion != null);
+
         sb.AppendLine("<!DOCTYPE html>");
         sb.AppendLine("<html>");
         sb.AppendLine("<head>");
@@ -198,12 +251,14 @@ public class ReportGenerator : IReportGenerator
         sb.AppendLine("table { border-collapse: collapse; width: 100%; margin-bottom: 20px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }");
         sb.AppendLine("th { background: #0066cc; color: white; padding: 12px; text-align: left; font-weight: 600; }");
         sb.AppendLine("td { padding: 12px; border-bottom: 1px solid #e0e0e0; }");
-        sb.AppendLine("tr:hover { background: #f9f9f9; }");
         sb.AppendLine("tr:last-child td { border-bottom: none; }");
         sb.AppendLine(".summary { background: white; padding: 15px; border-left: 4px solid #0066cc; margin: 20px 0; border-radius: 4px; font-size: 16px; }");
         sb.AppendLine(".summary strong { color: #0066cc; }");
-        sb.AppendLine(".violation-row { background: #fff3cd; }");
-        sb.AppendLine(".violation-row:hover { background: #ffe8a8; }");
+        sb.AppendLine(".row-ok { background: #f0fff4; } .row-ok:hover { background: #d4edda; }");
+        sb.AppendLine(".row-fail { background: #fff5f5; } .row-fail:hover { background: #f8d7da; }");
+        sb.AppendLine(".badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 0.8em; font-weight: 700; letter-spacing: 0.03em; }");
+        sb.AppendLine(".badge-ok { background: #28a745; color: white; } .badge-fail { background: #dc3545; color: white; }");
+        sb.AppendLine(".badge-current { background: #6c757d; color: white; } .badge-outdated { background: #fd7e14; color: white; }");
         sb.AppendLine("</style>");
         sb.AppendLine("</head>");
         sb.AppendLine("<body>");
@@ -212,30 +267,70 @@ public class ReportGenerator : IReportGenerator
         var violations = entries.Where(e => e.IsViolation).OrderBy(e => e.PackageId).ToList();
         var valid = entries.Where(e => !e.IsViolation).OrderBy(e => e.PackageId).ToList();
 
-        if (violations.Count > 0)
+        if (violations.Count > 0 && valid.Count > 0)
         {
-            sb.AppendLine("<h2>Violations</h2>");
+            sb.AppendLine("<h2>Packages</h2>");
             sb.AppendLine("<table>");
-            sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>License</th><th>Reason</th><th>Projects</th></tr></thead>");
+            if (showUpdates)
+                sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>Latest</th><th>License</th><th>Status</th><th>Reason</th><th>Projects</th></tr></thead>");
+            else
+                sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>License</th><th>Status</th><th>Reason</th><th>Projects</th></tr></thead>");
             sb.AppendLine("<tbody>");
-            foreach (var entry in violations)
+            foreach (var entry in entries.OrderBy(e => e.PackageId))
             {
+                var rowClass = entry.IsViolation ? "row-fail" : "row-ok";
+                var badge = entry.IsViolation
+                    ? "<span class=\"badge badge-fail\">FAIL</span>"
+                    : "<span class=\"badge badge-ok\">OK</span>";
                 var projectList = string.Join(", ", entry.Projects);
-                sb.AppendLine($"<tr class=\"violation-row\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{HtmlEncode(entry.License)}</td><td>{HtmlEncode(entry.Reason)}</td><td>{HtmlEncode(projectList)}</td></tr>");
+                if (showUpdates)
+                {
+                    var latestCell = FormatLatestHtml(entry);
+                    sb.AppendLine($"<tr class=\"{rowClass}\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{latestCell}</td><td>{HtmlEncode(entry.License)}</td><td>{badge}</td><td>{HtmlEncode(entry.Reason)}</td><td>{HtmlEncode(projectList)}</td></tr>");
+                }
+                else
+                {
+                    sb.AppendLine($"<tr class=\"{rowClass}\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{HtmlEncode(entry.License)}</td><td>{badge}</td><td>{HtmlEncode(entry.Reason)}</td><td>{HtmlEncode(projectList)}</td></tr>");
+                }
             }
             sb.AppendLine("</tbody>");
             sb.AppendLine("</table>");
         }
-
-        if (valid.Count > 0)
+        else if (violations.Count > 0)
+        {
+            sb.AppendLine("<h2>Violations</h2>");
+            sb.AppendLine("<table>");
+            sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>License</th><th>Status</th><th>Reason</th><th>Projects</th></tr></thead>");
+            sb.AppendLine("<tbody>");
+            foreach (var entry in violations)
+            {
+                var projectList = string.Join(", ", entry.Projects);
+                sb.AppendLine($"<tr class=\"row-fail\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{HtmlEncode(entry.License)}</td><td><span class=\"badge badge-fail\">FAIL</span></td><td>{HtmlEncode(entry.Reason)}</td><td>{HtmlEncode(projectList)}</td></tr>");
+            }
+            sb.AppendLine("</tbody>");
+            sb.AppendLine("</table>");
+        }
+        else if (valid.Count > 0)
         {
             sb.AppendLine("<h2>Valid Packages</h2>");
             sb.AppendLine("<table>");
-            sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>License</th></tr></thead>");
+            if (showUpdates)
+                sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>Latest</th><th>License</th><th>Status</th><th>Projects</th></tr></thead>");
+            else
+                sb.AppendLine("<thead><tr><th>Package</th><th>Version</th><th>License</th><th>Status</th><th>Projects</th></tr></thead>");
             sb.AppendLine("<tbody>");
             foreach (var entry in valid)
             {
-                sb.AppendLine($"<tr><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{HtmlEncode(entry.License)}</td></tr>");
+                var projectList = HtmlEncode(string.Join(", ", entry.Projects));
+                if (showUpdates)
+                {
+                    var latestCell = FormatLatestHtml(entry);
+                    sb.AppendLine($"<tr class=\"row-ok\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{latestCell}</td><td>{HtmlEncode(entry.License)}</td><td><span class=\"badge badge-ok\">OK</span></td><td>{projectList}</td></tr>");
+                }
+                else
+                {
+                    sb.AppendLine($"<tr class=\"row-ok\"><td>{HtmlEncode(entry.PackageId)}</td><td>{HtmlEncode(entry.Version)}</td><td>{HtmlEncode(entry.License)}</td><td><span class=\"badge badge-ok\">OK</span></td><td>{projectList}</td></tr>");
+                }
             }
             sb.AppendLine("</tbody>");
             sb.AppendLine("</table>");
@@ -265,11 +360,20 @@ public class ReportGenerator : IReportGenerator
         return sb.ToString().TrimEnd();
     }
 
+    private static string FormatLatestHtml(PackageReportEntry entry)
+    {
+        if (entry.LatestVersion == null)
+            return string.Empty;
+        return entry.IsOutdated
+            ? $"<span class=\"badge badge-outdated\">\u2192 {HtmlEncode(entry.LatestVersion)}</span>"
+            : "<span class=\"badge badge-current\">\u2713</span>";
+    }
+
     private static string HtmlEncode(string? text)
     {
         if (string.IsNullOrEmpty(text))
             return text ?? string.Empty;
-        
+
         return System.Net.WebUtility.HtmlEncode(text);
     }
 }

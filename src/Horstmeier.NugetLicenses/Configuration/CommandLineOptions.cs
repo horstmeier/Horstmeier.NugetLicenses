@@ -52,4 +52,14 @@ public class CommandLineOptions
     /// variables, and CLI options apply.
     /// </summary>
     public string? ConfigFile { get; set; }
+
+    /// <summary>
+    /// Check for newer versions of direct dependencies.
+    /// </summary>
+    public bool? CheckUpdates { get; set; }
+
+    /// <summary>
+    /// Check for newer versions of all packages, including transitive dependencies.
+    /// </summary>
+    public bool? CheckUpdatesAll { get; set; }
 }

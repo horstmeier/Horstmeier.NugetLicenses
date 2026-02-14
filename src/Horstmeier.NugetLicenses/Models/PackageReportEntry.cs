@@ -6,4 +6,6 @@ public record PackageReportEntry(
     string License,
     bool IsViolation,
     string? Reason,
-    IReadOnlyList<string> Projects);
+    IReadOnlyList<string> Projects,
+    string? LatestVersion = null,
+    bool IsOutdated = false);

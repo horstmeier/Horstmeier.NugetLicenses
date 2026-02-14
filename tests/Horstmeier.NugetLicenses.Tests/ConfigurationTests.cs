@@ -176,6 +176,76 @@ public class ConfigurationTests : IDisposable
         Assert.False(quiet); // Default
     }
 
+    [Fact]
+    public void Settings_Defaults_CheckUpdatesFalse()
+    {
+        var settings = new LicenseCheckSettings();
+
+        Assert.False(settings.CheckUpdates);
+        Assert.False(settings.CheckUpdatesAll);
+    }
+
+    [Fact]
+    public void Settings_BindCheckUpdatesFromJson()
+    {
+        var json = """
+        {
+          "LicenseCheck": {
+            "CheckUpdates": true,
+            "CheckUpdatesAll": true
+          }
+        }
+        """;
+
+        var path = CreateTempJsonFile(json);
+        var config = new ConfigurationBuilder()
+            .AddJsonFile(path)
+            .Build();
+
+        var settings = new LicenseCheckSettings();
+        config.GetSection("LicenseCheck").Bind(settings);
+
+        Assert.True(settings.CheckUpdates);
+        Assert.True(settings.CheckUpdatesAll);
+    }
+
+    [Fact]
+    public void CommandLineOptions_CheckUpdates_MergesIntoSettings()
+    {
+        var settings = new LicenseCheckSettings { CheckUpdates = false, CheckUpdatesAll = false };
+        var cli = new CommandLineOptions { CheckUpdates = true };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.True(settings.CheckUpdates);
+        Assert.False(settings.CheckUpdatesAll);
+    }
+
+    [Fact]
+    public void CommandLineOptions_CheckUpdatesAll_ImpliesCheckUpdates()
+    {
+        // When CheckUpdatesAll is set, the merge logic also forces CheckUpdates = true
+        var settings = new LicenseCheckSettings { CheckUpdates = false, CheckUpdatesAll = false };
+        var cli = new CommandLineOptions { CheckUpdatesAll = true };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.True(settings.CheckUpdates);
+        Assert.True(settings.CheckUpdatesAll);
+    }
+
+    [Fact]
+    public void CommandLineOptions_NullCheckUpdates_DoesNotOverrideSettings()
+    {
+        var settings = new LicenseCheckSettings { CheckUpdates = true, CheckUpdatesAll = true };
+        var cli = new CommandLineOptions { CheckUpdates = null, CheckUpdatesAll = null };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.True(settings.CheckUpdates);
+        Assert.True(settings.CheckUpdatesAll);
+    }
+
     // Helper method that mimics the MergeSettings logic from Program.cs
     private static bool MergeSettingsForTest(LicenseCheckSettings settings, CommandLineOptions cli)
     {
@@ -185,7 +255,10 @@ public class ConfigurationTests : IDisposable
         if (cli.DisableCache != null) settings.EnableCache = !cli.DisableCache.Value;
         if (cli.CacheDurationDays != null) settings.CacheDurationDays = cli.CacheDurationDays.Value;
         if (cli.NuGetSource != null) settings.NuGetSource = cli.NuGetSource;
-        
+        if (cli.CheckUpdates != null) settings.CheckUpdates = cli.CheckUpdates.Value;
+        if (cli.CheckUpdatesAll != null) settings.CheckUpdatesAll = cli.CheckUpdatesAll.Value;
+        if (settings.CheckUpdatesAll) settings.CheckUpdates = true;
+
         return cli.Quiet ?? false;
     }
 
