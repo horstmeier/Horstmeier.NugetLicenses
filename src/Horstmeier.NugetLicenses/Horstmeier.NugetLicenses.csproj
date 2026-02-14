@@ -15,7 +15,12 @@
         <Description>Check NuGet package licenses against a permitted list</Description>
         <PackageProjectUrl>https://github.com/horstmeier/NugetLicenses</PackageProjectUrl>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
 
     <ItemGroup>
         <InternalsVisibleTo Include="Horstmeier.NugetLicenses.Tests"/>
