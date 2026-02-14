@@ -1,6 +1,8 @@
 # Horstmeier.NugetLicenses
 
-A .NET console application that recursively scans a directory for `packages.lock.json` files, resolves NuGet package licenses via the NuGet v3 API, and validates them against a configurable list of permitted SPDX licenses. Returns exit code 1 if any non-exempt package has a disallowed or missing license.
+A .NET console application that scans your projects for NuGet package dependencies, resolves their licenses via the NuGet v3 API, and validates them against a configurable list of permitted SPDX licenses. Returns exit code 1 if any non-exempt package has a disallowed or missing license.
+
+The tool discovers `.csproj` and `.fsproj` project files and extracts package dependencies from `packages.lock.json` files when available. If a lock file is missing, it falls back to using `dotnet list package` to resolve dependencies.
 
 ## Requirements
 
@@ -159,11 +161,51 @@ Remove-Item $env:USERPROFILE\.nugetlicenses\cache.json
 
 ## Directory Scanning
 
-The tool recursively scans the configured `ProjectPath` for all `packages.lock.json` files. This means you can point it at a solution root and it will discover packages from all projects at once.
+The tool discovers `.csproj` and `.fsproj` project files and extracts package dependencies for each project:
 
-- Packages are deduplicated across lock files (by lowercase ID + version)
-- Violations report which project(s) reference the offending package
-- The summary shows how many lock files were found and how many unique packages were resolved
+### Primary Approach: Package Lock Files
+
+For each project discovered, the tool first looks for a `packages.lock.json` file:
+- If found, parses dependencies from the lock file (fast and reliable)
+- If missing, falls back to `dotnet list package` command (when lock file is expected but not found, a warning is logged)
+
+This hybrid approach allows the tool to work with projects that have lock files enabled as well as those that don't.
+
+### When No Project Files Are Found
+
+If the tool doesn't find any `.csproj` or `.fsproj` files in the directory tree, it falls back to scanning for `packages.lock.json` files directly. This legacy fallback is useful for:
+- Solutions without project files in the root
+- Monorepos with a non-standard structure
+- Scenarios where you only have lock files available
+
+**Note:** When using legacy lock file scanning, per-project tracking is not available. The tool will still deduplicate packages and report violations, but without project-level context.
+
+### Configuration
+
+To enable lock files in your projects, add this to your `.csproj` or `.fsproj`:
+
+```xml
+<PropertyGroup>
+  <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+</PropertyGroup>
+```
+
+To use a custom lock file location, add:
+
+```xml
+<PropertyGroup>
+  <NuGetLockFilePath>./locks/packages.lock.json</NuGetLockFilePath>
+</PropertyGroup>
+```
+
+### Behavior
+
+The tool recursively scans the configured `ProjectPath`:
+- Discovers all `.csproj` and `.fsproj` files
+- For each project, extracts packages from lock files or `dotnet list package`
+- Deduplicates packages across projects (by lowercase ID + version)
+- Reports which projects reference each package
+- Tracks lock file status per project (enabled, missing, or not applicable)
 
 ## Exempt Packages
 
