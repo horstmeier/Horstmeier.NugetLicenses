@@ -44,19 +44,23 @@ jobs:
         run: dotnet test "Horstmeier.NugetLicenses.slnx" --configuration Release --no-build --verbosity normal
 
       - name: Run license validation (self-check)
-        # Execute the already-built tool without rebuilding; fail the job if the tool reports violations (non-zero exit code)
+        working-directory: ${{ github.workspace }}
+        shell: bash
         run: |
-          # Prefer running the built binary if present in Release output; fallback to `dotnet run --no-build`.
-          if [ -f "src/Horstmeier.NugetLicenses/bin/Release/net*/Horstmeier.NugetLicenses.dll" ]; then
-            dll=$(ls src/Horstmeier.NugetLicenses/bin/Release/net*/Horstmeier.NugetLicenses.dll | head -n 1)
+          set -euo pipefail
+          set -x
+
+          # Find the Release-built DLL for the tool (first match)
+          dll=$(find src/Horstmeier.NugetLicenses/bin/Release -type f -name 'Horstmeier.NugetLicenses.dll' -print -quit || true)
+
+          if [ -n "$dll" ]; then
             echo "Running built tool: $dll"
             dotnet "$dll" --project-path . --output-format json
           else
-            echo "Built binary not found, using dotnet run --no-build"
-            dotnet run --project src/Horstmeier.NugetLicenses --no-build -- --project-path . --output-format json
+            echo "Release-built dll not found, using dotnet run --no-build --configuration Release"
+            dotnet run --project src/Horstmeier.NugetLicenses --no-build --configuration Release -- --project-path . --output-format json
           fi
 
       - name: Pack (tool verification)
         if: always()
         run: dotnet pack src/Horstmeier.NugetLicenses/Horstmeier.NugetLicenses.csproj -c Release -o ./artifacts --no-build
-

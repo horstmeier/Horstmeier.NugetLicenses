@@ -112,7 +112,7 @@ outputFormatOption.Validators.Add(result =>
 
 CommandLineOptions? cliOptions = null;
 
-rootCommand.SetAction(async (pr, ct) =>
+rootCommand.SetAction((pr, _) =>
 {
     
     var projectPath = pr.GetValue(projectPathOption)!;
@@ -134,6 +134,8 @@ rootCommand.SetAction(async (pr, ct) =>
         CacheDir = pr.GetValue(cacheDirOption),
         RequireLockFiles = pr.GetValue(requireLockFilesOption) ? true : null
     };
+
+    return Task.CompletedTask;
 });
 
 var parseResult = rootCommand.Parse(args);
