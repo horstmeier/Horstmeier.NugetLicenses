@@ -1,5 +1,7 @@
 # Horstmeier.NugetLicenses
 
+[![CI](https://github.com/horstmeier/NugetLicenses/actions/workflows/ci.yml/badge.svg)](https://github.com/horstmeier/NugetLicenses/actions/workflows/ci.yml)
+
 A .NET console application that scans your projects for NuGet package dependencies, resolves their licenses via the NuGet v3 API, and validates them against a configurable list of permitted SPDX licenses. Returns exit code 1 if any non-exempt package has a disallowed or missing license.
 
 The tool discovers `.csproj` and `.fsproj` project files and extracts package dependencies from `packages.lock.json` files when available. If a lock file is missing, it falls back to using `dotnet list package` to resolve dependencies.

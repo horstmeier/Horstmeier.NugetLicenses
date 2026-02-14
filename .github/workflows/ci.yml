@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ main, master ]
+    tags: [ '0.*', 'v0.*' ]
   pull_request:
     branches: [ main, master ]
 
@@ -12,14 +13,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        #os: [ubuntu-latest, macos-latest, windows-latest]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         dotnet-version: [10.0.x]
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v3
@@ -40,29 +41,57 @@ jobs:
         run: dotnet restore "Horstmeier.NugetLicenses.slnx" --use-lock-file
 
       - name: Build
-        run: dotnet build "Horstmeier.NugetLicenses.slnx" --configuration Release --no-restore --verbosity minimal
+        run: dotnet build "Horstmeier.NugetLicenses.slnx" --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test "Horstmeier.NugetLicenses.slnx" --configuration Release --no-build --verbosity normal
+        run: dotnet test "Horstmeier.NugetLicenses.slnx" --configuration Release --no-build
 
       - name: Run license validation (self-check)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
           set -euo pipefail
-          set -x
 
           # Find the Release-built DLL for the tool (first match)
           dll=$(find src/Horstmeier.NugetLicenses/bin/Release -type f -name 'Horstmeier.NugetLicenses.dll' -print -quit || true)
 
           if [ -n "$dll" ]; then
             echo "Running built tool: $dll"
-            dotnet "$dll" --project-path . --output-format json
+            dotnet "$dll" --project-path . --output-format json > /dev/null
           else
             echo "Release-built dll not found, using dotnet run --no-build --configuration Release"
-            dotnet run --project src/Horstmeier.NugetLicenses --no-build --configuration Release -- --project-path . --output-format json
+            dotnet run --project src/Horstmeier.NugetLicenses --no-build --configuration Release -- --project-path . --output-format json > /dev/null
           fi
 
-      - name: Pack (tool verification)
-        if: always()
+      - name: Pack
         run: dotnet pack src/Horstmeier.NugetLicenses/Horstmeier.NugetLicenses.csproj -c Release -o ./artifacts --no-build
+
+      - name: Upload NuGet package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package-${{ matrix.os }}
+          path: ./artifacts/*.nupkg
+          retention-days: 30
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/') && github.event_name == 'push'
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "./artifacts/**/*.nupkg"
+          generateReleaseNotes: true
+          draft: false
+
+
