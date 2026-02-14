@@ -62,4 +62,20 @@ public class CommandLineOptions
     /// Check for newer versions of all packages, including transitive dependencies.
     /// </summary>
     public bool? CheckUpdatesAll { get; set; }
+
+    /// <summary>
+    /// API key for authenticating against a private NuGet feed.
+    /// </summary>
+    public string? NuGetApiKey { get; set; }
+
+    /// <summary>
+    /// Directory for storing the license and version cache files.
+    /// Defaults to ~/.nugetlicenses when not set.
+    /// </summary>
+    public string? CacheDir { get; set; }
+
+    /// <summary>
+    /// Fail if any project has RestorePackagesWithLockFile enabled but the lock file is missing.
+    /// </summary>
+    public bool? RequireLockFiles { get; set; }
 }

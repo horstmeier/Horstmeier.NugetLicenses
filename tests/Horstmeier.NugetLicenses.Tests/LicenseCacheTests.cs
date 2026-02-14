@@ -22,13 +22,11 @@ public class LicenseCacheTests
         var settings = new LicenseCheckSettings
         {
             EnableCache = true,
-            CacheDurationDays = cacheDurationDays
+            CacheDurationDays = cacheDurationDays,
+            CacheDirectory = _testCacheDir
         };
 
-        var logger = Substitute.For<ILogger<LicenseCache>>();
-        
-        // Create a custom cache that uses our test directory
-        return new TestLicenseCache(settings, logger, _testCacheDir);
+        return new LicenseCache(settings, Substitute.For<ILogger<LicenseCache>>());
     }
 
     [Fact]
@@ -127,14 +125,6 @@ public class LicenseCacheTests
         Assert.True(true);
     }
 
-    // Helper class to override cache directory for testing
-    private class TestLicenseCache : LicenseCache
-    {
-        public TestLicenseCache(LicenseCheckSettings settings, ILogger<LicenseCache> logger, string testCacheDir)
-            : base(settings, logger, testCacheDir)
-        {
-        }
-    }
 }
 
 

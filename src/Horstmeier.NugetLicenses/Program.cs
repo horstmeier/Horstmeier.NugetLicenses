@@ -10,103 +10,137 @@ using Microsoft.Extensions.Logging;
 // Define command-line options using System.CommandLine
 var rootCommand = new RootCommand("Check NuGet package licenses against a permitted list");
 
-var projectPathOption = new Option<string>(
-    aliases: ["--project-path", "-p"],
-    description: "Root directory to scan recursively for project files (csproj/fsproj) and packages.lock.json",
-    getDefaultValue: () => ".");
+var projectPathOption = new Option<string>("--project-path", "-p")
+{
+    Description = "Root directory to scan recursively for project files (csproj/fsproj) and packages.lock.json",
+    
+    DefaultValueFactory = _ =>  "."
+};
 
-var showAllPackagesOption = new Option<bool>(
-    aliases: ["--show-all-packages", "-a"],
-    description: "Include all packages in the report (not just violations)");
+var showAllPackagesOption = new Option<bool>("--show-all-packages", "-a")
+{
+    Description = "Include all packages in the report (not just violations)"
+};
 
-var outputFormatOption = new Option<string>(
-    aliases: ["--output-format", "-o"],
-    description: "Report format: console (default), markdown, html, or json",
-    getDefaultValue: () => "console");
+var outputFormatOption = new Option<string>("--output-format", "-o")
+{
+    Description = "Report format: console (default), markdown, html, or json",
+    DefaultValueFactory = _ => "console"
+};
 
-var quietOption = new Option<bool>(
-    aliases: ["--quiet", "-q"],
-    description: "Suppress info logging, only output the report");
+var quietOption = new Option<bool>("--quiet", "-q")
+{
+    Description = "Suppress info logging, only output the report"
+};
 
-var disableCacheOption = new Option<bool>(
-    aliases: ["--disable-cache"],
-    description: "Disable local license caching (caching is enabled by default)");
+var disableCacheOption = new Option<bool>("--disable-cache")
+{
+    Description = "Disable local license caching (caching is enabled by default)"
+};
 
-var cacheDurationOption = new Option<int?>(
-    aliases: ["--cache-duration-days"],
-    description: "Number of days to keep cached license information (default: 7)");
+var cacheDurationOption = new Option<int?>("--cache-duration-days")
+{
+    Description = "Number of days to keep cached license information (default: 7)"
+};
 
-var nugetSourceOption = new Option<string?>(
-    aliases: ["--nuget-source"],
-    description: "NuGet v3 API source URL");
+var nugetSourceOption = new Option<string?>("--nuget-source")
+{
+    Description = "NuGet v3 API source URL"
+};
 
-var enableLicenseHeuristicsOption = new Option<bool>(
-    aliases: ["--enable-license-heuristics"],
-    description: "Enable license file heuristics to identify unknown licenses from URLs (disabled by default)");
+var enableLicenseHeuristicsOption = new Option<bool>("--enable-license-heuristics")
+{
+    Description = "Enable license file heuristics to identify unknown licenses from URLs (disabled by default)"
+};
 
-var configFileOption = new Option<string?>(
-    aliases: ["--config-file"],
-    description: "Path to a nuget-licenses.json config file. When specified, bypasses all auto-discovered " +
+var configFileOption = new Option<string?>("--config-file")
+{
+    Description = "Path to a nuget-licenses.json config file. When specified, bypasses all auto-discovered " +
                  "config files (global and project-level). Only built-in defaults, this file, " +
-                 "environment variables, and CLI options apply.");
+                 "environment variables, and CLI options apply."
+};
 
-var checkUpdatesOption = new Option<bool>(
-    aliases: ["--check-updates"],
-    description: "Check for newer stable versions of direct dependencies");
+var checkUpdatesOption = new Option<bool>("--check-updates")
+{
+    Description = "Check for newer stable versions of direct dependencies"
+};
 
-var checkUpdatesAllOption = new Option<bool>(
-    aliases: ["--check-updates-all"],
-    description: "Check for newer stable versions of all packages, including transitive dependencies");
+var checkUpdatesAllOption = new Option<bool>("--check-updates-all")
+{
+    Description = "Check for newer stable versions of all packages, including transitive dependencies"
+};
 
-rootCommand.AddOption(projectPathOption);
-rootCommand.AddOption(showAllPackagesOption);
-rootCommand.AddOption(outputFormatOption);
-rootCommand.AddOption(quietOption);
-rootCommand.AddOption(disableCacheOption);
-rootCommand.AddOption(cacheDurationOption);
-rootCommand.AddOption(nugetSourceOption);
-rootCommand.AddOption(enableLicenseHeuristicsOption);
-rootCommand.AddOption(configFileOption);
-rootCommand.AddOption(checkUpdatesOption);
-rootCommand.AddOption(checkUpdatesAllOption);
+var nugetApiKeyOption = new Option<string?>("--nuget-api-key")
+{
+    Description = "API key for authenticating against a private NuGet feed"
+};
+
+var cacheDirOption = new Option<string?>("--cache-dir")
+{
+    Description = "Directory for storing the license and version cache files (default: ~/.nugetlicenses)"
+};
+
+var requireLockFilesOption = new Option<bool>("--require-lock-files")
+{
+    Description = "Fail if any project has RestorePackagesWithLockFile enabled but the lock file is missing"
+};
+
+rootCommand.Options.Add(projectPathOption);
+rootCommand.Options.Add(showAllPackagesOption);
+rootCommand.Options.Add(outputFormatOption);
+rootCommand.Options.Add(quietOption);
+rootCommand.Options.Add(disableCacheOption);
+rootCommand.Options.Add(cacheDurationOption);
+rootCommand.Options.Add(nugetSourceOption);
+rootCommand.Options.Add(enableLicenseHeuristicsOption);
+rootCommand.Options.Add(configFileOption);
+rootCommand.Options.Add(checkUpdatesOption);
+rootCommand.Options.Add(checkUpdatesAllOption);
+rootCommand.Options.Add(nugetApiKeyOption);
+rootCommand.Options.Add(cacheDirOption);
+rootCommand.Options.Add(requireLockFilesOption);
 
 // Add validation for output format
-outputFormatOption.AddValidator(result =>
+outputFormatOption.Validators.Add(result =>
 {
     var value = result.GetValueOrDefault<string>();
-    if (value != null && !new[] { "console", "markdown", "json", "html" }.Contains(value.ToLowerInvariant()))
+    if (!new[] { "console", "markdown", "json", "html" }.Contains(value.ToLowerInvariant()))
     {
-        result.ErrorMessage = "Output format must be one of: console, markdown, json, html";
+        result.AddError($"Invalid output format: {value}. Output format must be one of: console, markdown, json, html");
     }
 });
 
 CommandLineOptions? cliOptions = null;
-rootCommand.SetHandler(ctx =>
+
+rootCommand.SetAction(async (pr, ct) =>
 {
-    var pr = ctx.ParseResult;
-    var projectPath = pr.GetValueForOption(projectPathOption)!;
-    var format = pr.GetValueForOption(outputFormatOption)!;
+    
+    var projectPath = pr.GetValue(projectPathOption)!;
+    var format = pr.GetValue(outputFormatOption)!;
     cliOptions = new CommandLineOptions
     {
         ProjectPath = projectPath != "." ? projectPath : null,
-        ShowAllPackages = pr.GetValueForOption(showAllPackagesOption) ? true : null,
+        ShowAllPackages = pr.GetValue(showAllPackagesOption) ? true : null,
         OutputFormat = format != "console" ? format : null,
-        Quiet = pr.GetValueForOption(quietOption) ? true : null,
-        DisableCache = pr.GetValueForOption(disableCacheOption) ? true : null,
-        CacheDurationDays = pr.GetValueForOption(cacheDurationOption),
-        NuGetSource = pr.GetValueForOption(nugetSourceOption),
-        EnableLicenseFileHeuristics = pr.GetValueForOption(enableLicenseHeuristicsOption),
-        ConfigFile = pr.GetValueForOption(configFileOption),
-        CheckUpdates = pr.GetValueForOption(checkUpdatesOption) ? true : null,
-        CheckUpdatesAll = pr.GetValueForOption(checkUpdatesAllOption) ? true : null
+        Quiet = pr.GetValue(quietOption) ? true : null,
+        DisableCache = pr.GetValue(disableCacheOption) ? true : null,
+        CacheDurationDays = pr.GetValue(cacheDurationOption),
+        NuGetSource = pr.GetValue(nugetSourceOption),
+        EnableLicenseFileHeuristics = pr.GetValue(enableLicenseHeuristicsOption),
+        ConfigFile = pr.GetValue(configFileOption),
+        CheckUpdates = pr.GetValue(checkUpdatesOption) ? true : null,
+        CheckUpdatesAll = pr.GetValue(checkUpdatesAllOption) ? true : null,
+        NuGetApiKey = pr.GetValue(nugetApiKeyOption),
+        CacheDir = pr.GetValue(cacheDirOption),
+        RequireLockFiles = pr.GetValue(requireLockFilesOption) ? true : null
     };
 });
 
-var parseResult = await rootCommand.InvokeAsync(args);
-
+var parseResult = rootCommand.Parse(args);
+var retCode = await parseResult.InvokeAsync();
 // If parsing failed or help was shown, exit early
-if (parseResult != 0 || cliOptions == null)
-    return parseResult;
+if (retCode != 0 || cliOptions == null)
+    return retCode;
 
 // Resolve project path early — needed for config file walk-up discovery
 var resolvedProjectPath = Path.GetFullPath(cliOptions.ProjectPath ?? ".");
@@ -203,6 +237,19 @@ if (!quiet)
         Console.Error.WriteLine($"Found {scanResult.Packages.Count} unique packages across {scanResult.LockFileCount} lock file(s)");
 }
 
+if (settings.RequireLockFiles)
+{
+    var missing = scanResult.Projects
+        .Where(p => p.LockFileEnabled && !p.HasLockFile)
+        .ToList();
+    if (missing.Count > 0)
+    {
+        foreach (var p in missing)
+            Console.Error.WriteLine($"Error: Lock file missing for project: {p.ProjectName}");
+        return 1;
+    }
+}
+
 var licenses = await resolver.ResolveAsync(scanResult.Packages);
 
 if (!quiet)
@@ -268,6 +315,9 @@ static bool MergeSettings(LicenseCheckSettings settings, CommandLineOptions cli)
     if (cli.EnableLicenseFileHeuristics != null) settings.EnableLicenseFileHeuristics = cli.EnableLicenseFileHeuristics.Value;
     if (cli.CheckUpdates != null) settings.CheckUpdates = cli.CheckUpdates.Value;
     if (cli.CheckUpdatesAll != null) settings.CheckUpdatesAll = cli.CheckUpdatesAll.Value;
+    if (cli.NuGetApiKey != null) settings.NuGetApiKey = cli.NuGetApiKey;
+    if (cli.CacheDir != null) settings.CacheDirectory = cli.CacheDir;
+    if (cli.RequireLockFiles != null) settings.RequireLockFiles = cli.RequireLockFiles.Value;
 
     // --check-updates-all implies --check-updates
     if (settings.CheckUpdatesAll) settings.CheckUpdates = true;

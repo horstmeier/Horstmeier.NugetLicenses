@@ -13,4 +13,7 @@ public class LicenseCheckSettings
     public bool EnableLicenseFileHeuristics { get; set; } = false;
     public bool CheckUpdates { get; set; } = false;
     public bool CheckUpdatesAll { get; set; } = false;
+    public string? NuGetApiKey { get; set; } = null;
+    public string? CacheDirectory { get; set; } = null;
+    public bool RequireLockFiles { get; set; } = false;
 }

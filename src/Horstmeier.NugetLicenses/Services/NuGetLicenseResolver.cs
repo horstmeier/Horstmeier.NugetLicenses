@@ -3,6 +3,7 @@ using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Microsoft.Extensions.Logging;
 using NuGet.Common;
+using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -16,15 +17,17 @@ public class NuGetLicenseResolver : ILicenseResolver
     private readonly ILicenseFileAnalyzer _analyzer;
     private readonly ILicenseCache? _cache;
     private readonly string _nuGetSource;
+    private readonly string? _nuGetApiKey;
     private readonly bool _enableLicenseFileHeuristics;
 
     public NuGetLicenseResolver(
-        LicenseCheckSettings settings, 
-        ILicenseFileAnalyzer analyzer, 
+        LicenseCheckSettings settings,
+        ILicenseFileAnalyzer analyzer,
         ILogger<NuGetLicenseResolver> logger,
         ILicenseCache? cache = null)
     {
         _nuGetSource = settings.NuGetSource;
+        _nuGetApiKey = settings.NuGetApiKey;
         _analyzer = analyzer;
         _logger = logger;
         _cache = cache;
@@ -35,7 +38,11 @@ public class NuGetLicenseResolver : ILicenseResolver
         IReadOnlyList<PackageReference> packages,
         CancellationToken cancellationToken = default)
     {
-        var repository = Repository.Factory.GetCoreV3(_nuGetSource);
+        var packageSource = new PackageSource(_nuGetSource);
+        if (!string.IsNullOrEmpty(_nuGetApiKey))
+            packageSource.Credentials = new PackageSourceCredential(
+                _nuGetSource, "user", _nuGetApiKey, isPasswordClearText: true, validAuthenticationTypesText: null);
+        var repository = Repository.Factory.GetCoreV3(packageSource);
         var metadataResource = await repository.GetResourceAsync<PackageMetadataResource>(cancellationToken);
 
         var results = new ConcurrentBag<LicenseInfo>();

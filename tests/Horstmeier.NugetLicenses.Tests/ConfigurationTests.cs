@@ -246,6 +246,49 @@ public class ConfigurationTests : IDisposable
         Assert.True(settings.CheckUpdatesAll);
     }
 
+    [Fact]
+    public void Settings_Defaults_NewPropertiesHaveExpectedValues()
+    {
+        var settings = new LicenseCheckSettings();
+
+        Assert.Null(settings.NuGetApiKey);
+        Assert.Null(settings.CacheDirectory);
+        Assert.False(settings.RequireLockFiles);
+    }
+
+    [Fact]
+    public void CommandLineOptions_NuGetApiKey_MergesIntoSettings()
+    {
+        var settings = new LicenseCheckSettings();
+        var cli = new CommandLineOptions { NuGetApiKey = "my-secret-key" };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.Equal("my-secret-key", settings.NuGetApiKey);
+    }
+
+    [Fact]
+    public void CommandLineOptions_CacheDir_MergesIntoSettings()
+    {
+        var settings = new LicenseCheckSettings();
+        var cli = new CommandLineOptions { CacheDir = "/mnt/cache/nuget" };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.Equal("/mnt/cache/nuget", settings.CacheDirectory);
+    }
+
+    [Fact]
+    public void CommandLineOptions_RequireLockFiles_MergesIntoSettings()
+    {
+        var settings = new LicenseCheckSettings { RequireLockFiles = false };
+        var cli = new CommandLineOptions { RequireLockFiles = true };
+
+        MergeSettingsForTest(settings, cli);
+
+        Assert.True(settings.RequireLockFiles);
+    }
+
     // Helper method that mimics the MergeSettings logic from Program.cs
     private static bool MergeSettingsForTest(LicenseCheckSettings settings, CommandLineOptions cli)
     {
@@ -257,6 +300,9 @@ public class ConfigurationTests : IDisposable
         if (cli.NuGetSource != null) settings.NuGetSource = cli.NuGetSource;
         if (cli.CheckUpdates != null) settings.CheckUpdates = cli.CheckUpdates.Value;
         if (cli.CheckUpdatesAll != null) settings.CheckUpdatesAll = cli.CheckUpdatesAll.Value;
+        if (cli.NuGetApiKey != null) settings.NuGetApiKey = cli.NuGetApiKey;
+        if (cli.CacheDir != null) settings.CacheDirectory = cli.CacheDir;
+        if (cli.RequireLockFiles != null) settings.RequireLockFiles = cli.RequireLockFiles.Value;
         if (settings.CheckUpdatesAll) settings.CheckUpdates = true;
 
         return cli.Quiet ?? false;

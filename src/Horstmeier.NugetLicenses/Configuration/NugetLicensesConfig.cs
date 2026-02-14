@@ -12,4 +12,7 @@ internal class NugetLicensesConfig
     public bool? EnableCache { get; set; }
     public int? CacheDurationDays { get; set; }
     public bool? EnableLicenseFileHeuristics { get; set; }
+    public string? NuGetApiKey { get; set; }
+    public string? CacheDirectory { get; set; }
+    public bool? RequireLockFiles { get; set; }
 }

@@ -1,0 +1,88 @@
+# azure-pipelines.example.yml
+#
+# Example Azure DevOps pipeline for running nuget-licenses in a CI environment.
+# Covers:
+#   - Installing the tool
+#   - Restoring with locked mode (detects missing lock files)
+#   - License check with private feed auth and a writable cache directory
+#   - Publishing the report as a pipeline artifact
+#
+# Adapt variables and paths to your project layout.
+
+trigger:
+  - main
+
+variables:
+  # Set LICENSECHECK_NuGetApiKey as a secret variable in the pipeline UI
+  # (Pipeline → Edit → Variables) so it is never written to logs.
+  NUGET_LICENSES_TOOL_VERSION: '0.1.0-beta.0'
+
+  # Point to a writable directory on the agent; avoids ~/.nugetlicenses
+  # being unavailable in container-based agents.
+  LICENSE_CACHE_DIR: '$(Agent.TempDirectory)/nugetlicenses-cache'
+
+pool:
+  vmImage: 'ubuntu-latest'   # or your self-hosted agent pool
+
+steps:
+  # ------------------------------------------------------------------
+  # 1. Install the nuget-licenses tool
+  # ------------------------------------------------------------------
+  - task: DotNetCoreCLI@2
+    displayName: 'Install nuget-licenses tool'
+    inputs:
+      command: custom
+      custom: tool
+      arguments: >
+        install --global Horstmeier.NugetLicenses
+        --version $(NUGET_LICENSES_TOOL_VERSION)
+
+  # ------------------------------------------------------------------
+  # 2. Restore NuGet packages in locked mode
+  #    --locked-mode fails the build if packages.lock.json is out of date
+  #    or missing, catching misconfigured projects early.
+  # ------------------------------------------------------------------
+  - task: DotNetCoreCLI@2
+    displayName: 'Restore packages (locked mode)'
+    inputs:
+      command: restore
+      projects: '**/*.csproj'
+      arguments: '--locked-mode'
+
+  # ------------------------------------------------------------------
+  # 3. Run the license check
+  #
+  #    --require-lock-files   → fail if a project has
+  #                             RestorePackagesWithLockFile=true but no
+  #                             packages.lock.json on disk
+  #    --nuget-api-key        → read from a secret pipeline variable
+  #    --nuget-source         → your on-premise Azure Artifacts feed URL
+  #    --cache-dir            → writable path inside Agent.TempDirectory
+  #    --output-format        → produces a machine-readable report artifact
+  # ------------------------------------------------------------------
+  - script: |
+      nuget-licenses \
+        --project-path "$(Build.SourcesDirectory)" \
+        --require-lock-files \
+        --nuget-source "$(NUGET_FEED_URL)" \
+        --nuget-api-key "$(LICENSECHECK_NuGetApiKey)" \
+        --cache-dir "$(LICENSE_CACHE_DIR)" \
+        --output-format json \
+        --show-all-packages \
+        > "$(Build.ArtifactStagingDirectory)/license-report.json"
+    displayName: 'Check NuGet licenses'
+    env:
+      # Expose the secret variable to the script via an environment
+      # variable mapping (required for secret variables in Azure DevOps).
+      LICENSECHECK_NuGetApiKey: $(LICENSECHECK_NuGetApiKey)
+
+  # ------------------------------------------------------------------
+  # 4. Publish the license report as a build artifact
+  # ------------------------------------------------------------------
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish license report'
+    condition: always()   # publish even when the license check fails
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/license-report.json'
+      ArtifactName: 'license-report'
+      publishLocation: 'Container'

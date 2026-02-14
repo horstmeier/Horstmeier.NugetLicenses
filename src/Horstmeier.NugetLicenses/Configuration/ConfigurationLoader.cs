@@ -75,5 +75,8 @@ internal static class ConfigurationLoader
         if (config.EnableCache != null) settings.EnableCache = config.EnableCache.Value;
         if (config.CacheDurationDays != null) settings.CacheDurationDays = config.CacheDurationDays.Value;
         if (config.EnableLicenseFileHeuristics != null) settings.EnableLicenseFileHeuristics = config.EnableLicenseFileHeuristics.Value;
+        if (config.NuGetApiKey != null) settings.NuGetApiKey = config.NuGetApiKey;
+        if (config.CacheDirectory != null) settings.CacheDirectory = config.CacheDirectory;
+        if (config.RequireLockFiles != null) settings.RequireLockFiles = config.RequireLockFiles.Value;
     }
 }

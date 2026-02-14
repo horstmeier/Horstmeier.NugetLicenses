@@ -15,7 +15,7 @@ public class LicenseCache : ILicenseCache
     private bool _isDirty;
 
     public LicenseCache(LicenseCheckSettings settings, ILogger<LicenseCache> logger)
-        : this(settings, logger, null)
+        : this(settings, logger, settings.CacheDirectory)
     {
     }
 

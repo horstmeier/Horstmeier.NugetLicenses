@@ -4,6 +4,7 @@ using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Microsoft.Extensions.Logging;
 using NuGet.Common;
+using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -17,6 +18,7 @@ public class VersionChecker : IVersionChecker
 
     private readonly ILogger<VersionChecker> _logger;
     private readonly string _nuGetSource;
+    private readonly string? _nuGetApiKey;
     private readonly bool _enableCache;
     private readonly string _cacheFilePath;
     private readonly Dictionary<string, VersionCacheEntry> _cache = new();
@@ -27,11 +29,11 @@ public class VersionChecker : IVersionChecker
     {
         _logger = logger;
         _nuGetSource = settings.NuGetSource;
+        _nuGetApiKey = settings.NuGetApiKey;
         _enableCache = settings.EnableCache;
 
-        var cacheDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nugetlicenses");
+        var cacheDir = settings.CacheDirectory
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nugetlicenses");
         Directory.CreateDirectory(cacheDir);
         _cacheFilePath = Path.Combine(cacheDir, "version-cache.json");
 
@@ -57,7 +59,11 @@ public class VersionChecker : IVersionChecker
             .Select(g => g.First())
             .ToList();
 
-        var repository = Repository.Factory.GetCoreV3(_nuGetSource);
+        var packageSource = new PackageSource(_nuGetSource);
+        if (!string.IsNullOrEmpty(_nuGetApiKey))
+            packageSource.Credentials = new PackageSourceCredential(
+                _nuGetSource, "user", _nuGetApiKey, isPasswordClearText: true, validAuthenticationTypesText: null);
+        var repository = Repository.Factory.GetCoreV3(packageSource);
         var findResource = await repository.GetResourceAsync<FindPackageByIdResource>(cancellationToken);
         var sourceCache = new SourceCacheContext();
 

@@ -1,37 +1,37 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 
-    <!-- dotnet tool packaging -->
-    <PackAsTool>true</PackAsTool>
-    <ToolCommandName>nuget-licenses</ToolCommandName>
-    <PackageId>Horstmeier.NugetLicenses</PackageId>
-    <Version>0.1.0-beta.0</Version>
-    <Authors>Jens Horstmeier</Authors>
-    <Description>Check NuGet package licenses against a permitted list</Description>
-    <PackageProjectUrl>https://github.com/horstmeier/NugetLicenses</PackageProjectUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-  </PropertyGroup>
+        <!-- dotnet tool packaging -->
+        <PackAsTool>true</PackAsTool>
+        <ToolCommandName>nuget-licenses</ToolCommandName>
+        <PackageId>Horstmeier.NugetLicenses</PackageId>
+        <Version>0.1.0-beta.0</Version>
+        <Authors>Jens Horstmeier</Authors>
+        <Description>Check NuGet package licenses against a permitted list</Description>
+        <PackageProjectUrl>https://github.com/horstmeier/NugetLicenses</PackageProjectUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Horstmeier.NugetLicenses.Tests" />
-  </ItemGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="Horstmeier.NugetLicenses.Tests"/>
+    </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.3" />
-<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
-    <PackageReference Include="NuGet.Protocol" Version="7.3.0" />
-    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3"/>
+        <PackageReference Include="NuGet.Protocol" Version="7.3.0"/>
+        <PackageReference Include="System.CommandLine" Version="2.0.3"/>
+    </ItemGroup>
 
 </Project>
