@@ -1,6 +1,8 @@
 using FluentAssertions;
+using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 
 namespace Horstmeier.NugetLicenses.Tests;
 
@@ -8,7 +10,13 @@ public class PackageLockParserTests : IDisposable
 {
     private readonly List<string> _tempFiles = [];
     private readonly List<string> _tempDirs = [];
-    private readonly PackageLockParser _parser = new(NullLogger<PackageLockParser>.Instance);
+    private readonly IProjectFileParser _projectFileParser = Substitute.For<IProjectFileParser>();
+    private readonly PackageLockParser _parser;
+
+    public PackageLockParserTests()
+    {
+        _parser = new PackageLockParser(NullLogger<PackageLockParser>.Instance, _projectFileParser);
+    }
 
     private string CreateTempLockFile(string json)
     {
@@ -149,7 +157,7 @@ public class PackageLockParserTests : IDisposable
     }
 
     [Fact]
-    public void ParseDirectory_FindsLockFilesRecursively()
+    public async Task ParseDirectoryAsync_FindsLockFilesRecursively()
     {
         var root = CreateTempDir();
         CreateLockFile(Path.Combine(root, "projectA"), """
@@ -173,28 +181,31 @@ public class PackageLockParserTests : IDisposable
         }
         """);
 
-        var result = _parser.ParseDirectory(root);
+        // No csproj files → legacy lock file scan
+        var result = await _parser.ParseDirectoryAsync(root);
 
         result.Packages.Should().HaveCount(2);
         result.Packages.Should().Contain(p => p.Id == "PackageA" && p.Version == "1.0.0");
         result.Packages.Should().Contain(p => p.Id == "PackageB" && p.Version == "2.0.0");
         result.LockFileCount.Should().Be(2);
+        result.Projects.Should().BeEmpty();
     }
 
     [Fact]
-    public void ParseDirectory_NoLockFiles_ReturnsEmpty()
+    public async Task ParseDirectoryAsync_NoLockFiles_ReturnsEmpty()
     {
         var root = CreateTempDir();
 
-        var result = _parser.ParseDirectory(root);
+        var result = await _parser.ParseDirectoryAsync(root);
 
         result.Packages.Should().BeEmpty();
         result.ProjectsByPackage.Should().BeEmpty();
         result.LockFileCount.Should().Be(0);
+        result.Projects.Should().BeEmpty();
     }
 
     [Fact]
-    public void ParseDirectory_DuplicateAcrossProjects_Deduplicated()
+    public async Task ParseDirectoryAsync_DuplicateAcrossProjects_Deduplicated()
     {
         var root = CreateTempDir();
         var json = """
@@ -210,7 +221,7 @@ public class PackageLockParserTests : IDisposable
         CreateLockFile(Path.Combine(root, "projectA"), json);
         CreateLockFile(Path.Combine(root, "projectB"), json);
 
-        var result = _parser.ParseDirectory(root);
+        var result = await _parser.ParseDirectoryAsync(root);
 
         result.Packages.Should().HaveCount(1);
         result.Packages[0].Id.Should().Be("SharedPackage");
@@ -218,7 +229,7 @@ public class PackageLockParserTests : IDisposable
     }
 
     [Fact]
-    public void ParseDirectory_TracksProjectsPerPackage()
+    public async Task ParseDirectoryAsync_TracksProjectsPerPackage()
     {
         var root = CreateTempDir();
         var sharedJson = """
@@ -246,7 +257,7 @@ public class PackageLockParserTests : IDisposable
         CreateLockFile(Path.Combine(root, "projectA"), sharedJson);
         CreateLockFile(Path.Combine(root, "projectB"), projectBJson);
 
-        var result = _parser.ParseDirectory(root);
+        var result = await _parser.ParseDirectoryAsync(root);
 
         result.Packages.Should().HaveCount(3);
         result.LockFileCount.Should().Be(2);
@@ -262,6 +273,111 @@ public class PackageLockParserTests : IDisposable
         var uniqueBKey = "uniqueb|3.0.0";
         result.ProjectsByPackage.Should().ContainKey(uniqueBKey);
         result.ProjectsByPackage[uniqueBKey].Should().BeEquivalentTo("projectB");
+    }
+
+    [Fact]
+    public async Task ParseDirectoryAsync_WithCsprojAndLockFile_UsesLockFileAndBuildsProjectInfo()
+    {
+        var root = CreateTempDir();
+        var projectDir = Path.Combine(root, "MyApp");
+        Directory.CreateDirectory(projectDir);
+
+        var csprojPath = Path.Combine(projectDir, "MyApp.csproj");
+        File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        CreateLockFile(projectDir, """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "PackageA": { "type": "Direct", "resolved": "1.0.0" },
+              "PackageB": { "type": "Transitive", "resolved": "2.0.0" }
+            }
+          }
+        }
+        """);
+
+        _projectFileParser.IsPackageLockEnabled(csprojPath).Returns(true);
+        _projectFileParser.GetCustomLockFilePath(csprojPath).Returns((string?)null);
+
+        var result = await _parser.ParseDirectoryAsync(root);
+
+        result.Packages.Should().HaveCount(2);
+        result.LockFileCount.Should().Be(1);
+        result.Projects.Should().HaveCount(1);
+
+        var project = result.Projects[0];
+        project.ProjectName.Should().Be("MyApp");
+        project.PackageCount.Should().Be(2);
+        project.LockFileEnabled.Should().BeTrue();
+        project.HasLockFile.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ParseDirectoryAsync_WithCsprojNoLockFile_UsesDotnetListPackage()
+    {
+        var root = CreateTempDir();
+        var projectDir = Path.Combine(root, "MyLib");
+        Directory.CreateDirectory(projectDir);
+
+        var csprojPath = Path.Combine(projectDir, "MyLib.csproj");
+        File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        // No packages.lock.json
+
+        _projectFileParser.IsPackageLockEnabled(csprojPath).Returns(false);
+        _projectFileParser.GetCustomLockFilePath(csprojPath).Returns((string?)null);
+        _projectFileParser.GetPackagesAsync(csprojPath, Arg.Any<CancellationToken>())
+            .Returns(new List<PackageReference>
+            {
+                new("SomePackage", "3.0.0", "Direct", "net10.0"),
+                new("TransPackage", "1.0.0", "Transitive", "net10.0")
+            });
+
+        var result = await _parser.ParseDirectoryAsync(root);
+
+        result.Packages.Should().HaveCount(2);
+        result.LockFileCount.Should().Be(0);
+        result.Projects.Should().HaveCount(1);
+
+        var project = result.Projects[0];
+        project.ProjectName.Should().Be("MyLib");
+        project.PackageCount.Should().Be(2);
+        project.LockFileEnabled.Should().BeFalse();
+        project.HasLockFile.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ParseDirectoryAsync_WithFsprojFile_Supported()
+    {
+        var root = CreateTempDir();
+        var projectDir = Path.Combine(root, "MyFSharpLib");
+        Directory.CreateDirectory(projectDir);
+
+        var fsprojPath = Path.Combine(projectDir, "MyFSharpLib.fsproj");
+        File.WriteAllText(fsprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+
+        CreateLockFile(projectDir, """
+        {
+          "version": 1,
+          "dependencies": {
+            "net10.0": {
+              "FSharpPackage": { "type": "Direct", "resolved": "5.0.0" }
+            }
+          }
+        }
+        """);
+
+        _projectFileParser.IsPackageLockEnabled(fsprojPath).Returns(false);
+        _projectFileParser.GetCustomLockFilePath(fsprojPath).Returns((string?)null);
+
+        var result = await _parser.ParseDirectoryAsync(root);
+
+        result.Packages.Should().HaveCount(1);
+        result.Packages[0].Id.Should().Be("FSharpPackage");
+        result.Projects.Should().HaveCount(1);
+        result.Projects[0].ProjectName.Should().Be("MyFSharpLib");
+        result.Projects[0].HasLockFile.Should().BeTrue();
     }
 
     public void Dispose()

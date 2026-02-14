@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
@@ -31,9 +30,9 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
-        result.TotalPackages.Should().Be(1);
-        result.ValidPackages.Should().Be(1);
+        Assert.False(result.HasViolations);
+        Assert.Equal(1, result.TotalPackages);
+        Assert.Equal(1, result.ValidPackages);
     }
 
     [Fact]
@@ -47,10 +46,10 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations.Should().HaveCount(1);
-        result.Violations[0].PackageId.Should().Be("PackageA");
-        result.Violations[0].Reason.Should().Contain("GPL-3.0");
+        Assert.True(result.HasViolations);
+        Assert.Single(result.Violations);
+        Assert.Equal("PackageA", result.Violations[0].PackageId);
+        Assert.Contains("GPL-3.0", result.Violations[0].Reason);
     }
 
     [Fact]
@@ -64,7 +63,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -78,7 +77,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -93,9 +92,9 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations.Should().HaveCount(1);
-        result.Violations[0].Version.Should().Be("2.0.0");
+        Assert.True(result.HasViolations);
+        Assert.Single(result.Violations);
+        Assert.Equal("2.0.0", result.Violations[0].Version);
     }
 
     [Fact]
@@ -110,7 +109,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -124,9 +123,9 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations[0].Reason.Should().Contain("No SPDX license expression");
-        result.Violations[0].LicenseUrl.Should().Be("https://example.com/license");
+        Assert.True(result.HasViolations);
+        Assert.Contains("No SPDX license expression", result.Violations[0].Reason);
+        Assert.Equal("https://example.com/license", result.Violations[0].LicenseUrl);
     }
 
     [Fact]
@@ -140,7 +139,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
+        Assert.True(result.HasViolations);
     }
 
     [Fact]
@@ -154,7 +153,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -168,7 +167,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
+        Assert.True(result.HasViolations);
     }
 
     [Fact]
@@ -182,7 +181,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -196,7 +195,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
+        Assert.True(result.HasViolations);
     }
 
     [Fact]
@@ -210,7 +209,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -226,11 +225,11 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations.Should().HaveCount(1);
-        result.Violations[0].PackageId.Should().Be("PackageB");
-        result.TotalPackages.Should().Be(3);
-        result.ValidPackages.Should().Be(2);
+        Assert.True(result.HasViolations);
+        Assert.Single(result.Violations);
+        Assert.Equal("PackageB", result.Violations[0].PackageId);
+        Assert.Equal(3, result.TotalPackages);
+        Assert.Equal(2, result.ValidPackages);
     }
 
     [Fact]
@@ -238,7 +237,7 @@ public class LicenseValidatorTests
     {
         var validator = CreateValidator();
 
-        validator.IsExpressionPermitted("( MIT OR GPL-3.0 )").Should().BeTrue();
+        Assert.True(validator.IsExpressionPermitted("( MIT OR GPL-3.0 )"));
     }
 
     [Fact]
@@ -247,7 +246,7 @@ public class LicenseValidatorTests
         var validator = CreateValidator();
 
         // (MIT AND Apache-2.0) OR GPL-3.0 — the left branch is fully permitted
-        validator.IsExpressionPermitted("( MIT AND Apache-2.0 ) OR GPL-3.0").Should().BeTrue();
+        Assert.True(validator.IsExpressionPermitted("( MIT AND Apache-2.0 ) OR GPL-3.0"));
     }
 
     [Fact]
@@ -261,7 +260,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -275,8 +274,8 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations[0].Reason.Should().Contain("GPL-3.0 WITH Classpath-exception-2.0");
+        Assert.True(result.HasViolations);
+        Assert.Contains("GPL-3.0 WITH Classpath-exception-2.0", result.Violations[0].Reason);
     }
 
     [Fact]
@@ -290,7 +289,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -305,7 +304,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -321,9 +320,9 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations.Should().HaveCount(1);
-        result.Violations[0].PackageId.Should().Be("OtherPackage");
+        Assert.True(result.HasViolations);
+        Assert.Single(result.Violations);
+        Assert.Equal("OtherPackage", result.Violations[0].PackageId);
     }
 
     [Fact]
@@ -337,7 +336,7 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeFalse();
+        Assert.False(result.HasViolations);
     }
 
     [Fact]
@@ -353,8 +352,8 @@ public class LicenseValidatorTests
 
         var result = validator.Validate(licenses);
 
-        result.HasViolations.Should().BeTrue();
-        result.Violations.Should().HaveCount(1);
-        result.Violations[0].PackageId.Should().Be("External.Lib");
+        Assert.True(result.HasViolations);
+        Assert.Single(result.Violations);
+        Assert.Equal("External.Lib", result.Violations[0].PackageId);
     }
 }

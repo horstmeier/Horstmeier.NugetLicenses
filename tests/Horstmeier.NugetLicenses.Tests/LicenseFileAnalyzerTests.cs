@@ -1,5 +1,4 @@
 using System.Net;
-using FluentAssertions;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -20,7 +19,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://licenses.nuget.org/MIT");
 
-        result.Should().Be("MIT");
+        Assert.Equal("MIT", result);
     }
 
     [Fact]
@@ -30,7 +29,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://licenses.nuget.org/Apache-2.0");
 
-        result.Should().Be("Apache-2.0");
+        Assert.Equal("Apache-2.0", result);
     }
 
     [Fact]
@@ -52,7 +51,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/license.txt");
 
-        result.Should().Be("MIT");
+        Assert.Equal("MIT", result);
     }
 
     [Fact]
@@ -70,7 +69,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().Be("Apache-2.0");
+        Assert.Equal("Apache-2.0", result);
     }
 
     [Fact]
@@ -90,7 +89,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().Be("BSD-3-Clause");
+        Assert.Equal("BSD-3-Clause", result);
     }
 
     [Fact]
@@ -108,7 +107,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().Be("BSD-2-Clause");
+        Assert.Equal("BSD-2-Clause", result);
     }
 
     [Fact]
@@ -125,7 +124,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().Be("ISC");
+        Assert.Equal("ISC", result);
     }
 
     [Fact]
@@ -137,7 +136,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -147,7 +146,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -157,7 +156,7 @@ public class LicenseFileAnalyzerTests
 
         var result = await analyzer.TryIdentifyFromUrlAsync("https://example.com/LICENSE");
 
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     private class FakeHandler : HttpMessageHandler

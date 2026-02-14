@@ -8,4 +8,6 @@ public class LicenseCheckSettings
     public bool ShowAllPackages { get; set; }
     public string OutputFormat { get; set; } = "console";
     public string NuGetSource { get; set; } = "https://api.nuget.org/v3/index.json";
+    public bool EnableCache { get; set; } = true;
+    public int CacheDurationDays { get; set; } = 365;
 }

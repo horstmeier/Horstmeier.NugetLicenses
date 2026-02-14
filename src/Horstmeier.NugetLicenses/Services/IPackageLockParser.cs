@@ -5,5 +5,5 @@ namespace Horstmeier.NugetLicenses.Services;
 public interface IPackageLockParser
 {
     IReadOnlyList<PackageReference> Parse(string lockFilePath);
-    DirectoryScanResult ParseDirectory(string rootPath);
+    Task<DirectoryScanResult> ParseDirectoryAsync(string rootPath, CancellationToken ct = default);
 }

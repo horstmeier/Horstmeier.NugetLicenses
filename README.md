@@ -10,21 +10,36 @@ A .NET console application that recursively scans a directory for `packages.lock
 ## Usage
 
 ```bash
+# Show help
+nuget-licenses --help
+
 # Run against the current directory
 dotnet run --project src/Horstmeier.NugetLicenses
 
 # Run against a specific project path (scans recursively for packages.lock.json files)
-dotnet run --project src/Horstmeier.NugetLicenses -- --ProjectPath=/path/to/your/solution
+dotnet run --project src/Horstmeier.NugetLicenses -- --project-path /path/to/your/solution
+# or using short form
+dotnet run --project src/Horstmeier.NugetLicenses -- -p /path/to/your/solution
 
 # Show all packages (not just violations)
-dotnet run --project src/Horstmeier.NugetLicenses -- --ShowAllPackages
+dotnet run --project src/Horstmeier.NugetLicenses -- --show-all-packages
+# or using short form
+dotnet run --project src/Horstmeier.NugetLicenses -- -a
 
 # Output as markdown or JSON
-dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=markdown
-dotnet run --project src/Horstmeier.NugetLicenses -- --OutputFormat=json
+dotnet run --project src/Horstmeier.NugetLicenses -- --output-format markdown
+dotnet run --project src/Horstmeier.NugetLicenses -- -o json
 
 # Quiet mode — suppress info logging, only output the report
-dotnet run --project src/Horstmeier.NugetLicenses -- --Quiet
+dotnet run --project src/Horstmeier.NugetLicenses -- --quiet
+# or using short form
+dotnet run --project src/Horstmeier.NugetLicenses -- -q
+
+# Disable cache
+dotnet run --project src/Horstmeier.NugetLicenses -- --disable-cache
+
+# Set cache duration
+dotnet run --project src/Horstmeier.NugetLicenses -- --cache-duration-days 30
 ```
 
 Exit codes:
@@ -76,6 +91,8 @@ Configuration is layered (later sources override earlier ones):
 | `ShowAllPackages` | When `true`, include all packages in the report (not just violations) |
 | `OutputFormat` | Report format: `console` (default), `markdown`, or `json` |
 | `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`) |
+| `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs |
+| `CacheDurationDays` | Number of days to keep cached license information (default: 7) |
 
 ### Environment variables
 
@@ -87,10 +104,57 @@ export LICENSECHECK_LicenseCheck__ProjectPath=/path/to/project
 
 ### Command-line arguments
 
+All command-line options use kebab-case with double dashes. Most options have short aliases with a single dash.
+
+Available options:
+- `--project-path <path>` or `-p <path>` — Root directory to scan
+- `--show-all-packages` or `-a` — Include all packages in report
+- `--output-format <format>` or `-o <format>` — Report format (console, markdown, json)
+- `--quiet` or `-q` — Suppress info logging
+- `--disable-cache` — Disable local license caching (caching is enabled by default)
+- `--cache-duration-days <days>` — Cache duration in days
+- `--nuget-source <url>` — Custom NuGet API URL
+
+Examples:
 ```bash
-dotnet run -- --ProjectPath=/path/to/project
-dotnet run -- --ShowAllPackages
-dotnet run -- --OutputFormat=json
+nuget-licenses --project-path /path/to/project
+nuget-licenses -p /path/to/project --show-all-packages
+nuget-licenses --output-format json --quiet
+nuget-licenses --disable-cache
+```
+
+## License Cache
+
+To speed up repeated scans, the tool caches resolved license information locally:
+
+- **Cache location**: `~/.nugetlicenses/cache.json` (Linux/macOS) or `%USERPROFILE%\.nugetlicenses\cache.json` (Windows)
+- **Cache duration**: Configurable via `CacheDurationDays` (default: 365 days)
+- **Cache behavior**: 
+  - First run: Fetches all license info from NuGet API and caches it
+  - Subsequent runs: Uses cached data for packages, only fetching new/expired entries
+  - Expired entries are automatically removed and refetched
+
+The cache significantly reduces scan time for large projects. To disable caching, use the `--disable-cache` flag or set `EnableCache` to `false` in configuration.
+
+```bash
+# Disable cache via environment variable
+export LICENSECHECK_LicenseCheck__EnableCache=false
+
+# Disable cache via command line (simple flag, no value needed)
+nuget-licenses --disable-cache
+
+# Set custom cache duration (30 days)
+nuget-licenses --cache-duration-days 30
+```
+
+To manually clear the cache, simply delete the cache file:
+
+```bash
+# Linux/macOS
+rm ~/.nugetlicenses/cache.json
+
+# Windows (PowerShell)
+Remove-Item $env:USERPROFILE\.nugetlicenses\cache.json
 ```
 
 ## Directory Scanning

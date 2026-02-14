@@ -15,17 +15,19 @@ public class ReportGenerator : IReportGenerator
         _settings = settings;
     }
 
-    public string Generate(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result)
+    public string Generate(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
+        IReadOnlyList<ProjectInfo>? projects = null)
     {
         return _settings.OutputFormat.ToLowerInvariant() switch
         {
-            "markdown" => GenerateMarkdown(entries, result),
-            "json" => GenerateJson(entries, result),
-            _ => GenerateConsole(entries, result)
+            "markdown" => GenerateMarkdown(entries, result, projects),
+            "json" => GenerateJson(entries, result, projects),
+            _ => GenerateConsole(entries, result, projects)
         };
     }
 
-    private static string GenerateConsole(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result)
+    private static string GenerateConsole(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
+        IReadOnlyList<ProjectInfo>? projects)
     {
         var sb = new StringBuilder();
 
@@ -48,11 +50,26 @@ public class ReportGenerator : IReportGenerator
             sb.AppendLine();
         }
 
-        sb.Append($"Summary: {result.ValidPackages}/{result.TotalPackages} packages valid, {result.Violations.Count} violation(s)");
-        return sb.ToString();
+        sb.AppendLine($"Summary: {result.ValidPackages}/{result.TotalPackages} packages valid, {result.Violations.Count} violation(s)");
+
+        if (projects is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine($"{"Project",-50} {"Packages",10}  {"Lock Enabled",13}  {"Lock File",10}");
+            sb.AppendLine(new string('-', 90));
+            foreach (var p in projects.OrderBy(p => p.ProjectName))
+            {
+                var lockEnabled = p.LockFileEnabled ? "Yes" : "No";
+                var hasLock = p.HasLockFile ? "Yes" : "No";
+                sb.AppendLine($"{p.ProjectName,-50} {p.PackageCount,10}  {lockEnabled,13}  {hasLock,10}");
+            }
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
-    private static string GenerateMarkdown(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result)
+    private static string GenerateMarkdown(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
+        IReadOnlyList<ProjectInfo>? projects)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# License Report");
@@ -69,8 +86,8 @@ public class ReportGenerator : IReportGenerator
             sb.AppendLine("|---------|---------|---------|--------|----------|");
             foreach (var entry in violations)
             {
-                var projects = string.Join(", ", entry.Projects);
-                sb.AppendLine($"| {entry.PackageId} | {entry.Version} | {entry.License} | {entry.Reason} | {projects} |");
+                var projectList = string.Join(", ", entry.Projects);
+                sb.AppendLine($"| {entry.PackageId} | {entry.Version} | {entry.License} | {entry.Reason} | {projectList} |");
             }
         }
 
@@ -88,11 +105,28 @@ public class ReportGenerator : IReportGenerator
         }
 
         sb.AppendLine();
-        sb.Append($"**Summary:** {result.ValidPackages}/{result.TotalPackages} packages valid, {result.Violations.Count} violation(s)");
-        return sb.ToString();
+        sb.AppendLine($"**Summary:** {result.ValidPackages}/{result.TotalPackages} packages valid, {result.Violations.Count} violation(s)");
+
+        if (projects is { Count: > 0 })
+        {
+            sb.AppendLine();
+            sb.AppendLine("## Projects");
+            sb.AppendLine();
+            sb.AppendLine("| Project | Packages | Lock Enabled | Lock File |");
+            sb.AppendLine("|---------|----------|--------------|-----------|");
+            foreach (var p in projects.OrderBy(p => p.ProjectName))
+            {
+                var lockEnabled = p.LockFileEnabled ? "Yes" : "No";
+                var hasLock = p.HasLockFile ? "Yes" : "No";
+                sb.AppendLine($"| {p.ProjectName} | {p.PackageCount} | {lockEnabled} | {hasLock} |");
+            }
+        }
+
+        return sb.ToString().TrimEnd();
     }
 
-    private string GenerateJson(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result)
+    private string GenerateJson(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
+        IReadOnlyList<ProjectInfo>? projects)
     {
         var violations = entries.Where(e => e.IsViolation).ToList();
 
@@ -124,6 +158,18 @@ public class ReportGenerator : IReportGenerator
                 isViolation = e.IsViolation,
                 reason = e.Reason,
                 projects = e.Projects
+            }).ToList();
+        }
+
+        if (projects is { Count: > 0 })
+        {
+            obj["projects"] = projects.OrderBy(p => p.ProjectName).Select(p => new
+            {
+                project = p.ProjectName,
+                projectFile = p.ProjectFilePath,
+                packages = p.PackageCount,
+                lockFileEnabled = p.LockFileEnabled,
+                hasLockFile = p.HasLockFile
             }).ToList();
         }
 

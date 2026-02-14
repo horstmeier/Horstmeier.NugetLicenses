@@ -4,5 +4,6 @@ namespace Horstmeier.NugetLicenses.Services;
 
 public interface IReportGenerator
 {
-    string Generate(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result);
+    string Generate(IReadOnlyList<PackageReportEntry> entries, LicenseValidationResult result,
+        IReadOnlyList<ProjectInfo>? projects = null);
 }

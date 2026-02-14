@@ -14,13 +14,19 @@ public class NuGetLicenseResolver : ILicenseResolver
     private const int MaxDegreeOfParallelism = 8;
     private readonly ILogger<NuGetLicenseResolver> _logger;
     private readonly ILicenseFileAnalyzer _analyzer;
+    private readonly ILicenseCache? _cache;
     private readonly string _nuGetSource;
 
-    public NuGetLicenseResolver(LicenseCheckSettings settings, ILicenseFileAnalyzer analyzer, ILogger<NuGetLicenseResolver> logger)
+    public NuGetLicenseResolver(
+        LicenseCheckSettings settings, 
+        ILicenseFileAnalyzer analyzer, 
+        ILogger<NuGetLicenseResolver> logger,
+        ILicenseCache? cache = null)
     {
         _nuGetSource = settings.NuGetSource;
         _analyzer = analyzer;
         _logger = logger;
+        _cache = cache;
     }
 
     public async Task<IReadOnlyList<LicenseInfo>> ResolveAsync(
@@ -43,6 +49,17 @@ public class NuGetLicenseResolver : ILicenseResolver
             {
                 try
                 {
+                    // Try to get from cache first
+                    if (_cache is not null)
+                    {
+                        var cached = await _cache.TryGetAsync(package.Id, package.Version);
+                        if (cached is not null)
+                        {
+                            results.Add(cached);
+                            return;
+                        }
+                    }
+
                     var identity = new NuGet.Packaging.Core.PackageIdentity(
                         package.Id,
                         NuGetVersion.Parse(package.Version));
@@ -56,7 +73,13 @@ public class NuGetLicenseResolver : ILicenseResolver
                     if (metadata is null)
                     {
                         _logger.LogWarning("No metadata found for {PackageId} {Version}", package.Id, package.Version);
-                        results.Add(new LicenseInfo(package.Id, package.Version, null, null));
+                        var licenseInfo = new LicenseInfo(package.Id, package.Version, null, null);
+                        results.Add(licenseInfo);
+                        
+                        // Cache the result even if no metadata found
+                        if (_cache is not null)
+                            await _cache.SetAsync(licenseInfo);
+                        
                         return;
                     }
 
@@ -70,7 +93,12 @@ public class NuGetLicenseResolver : ILicenseResolver
                             licenseExpression = detected;
                     }
 
-                    results.Add(new LicenseInfo(package.Id, package.Version, licenseExpression, licenseUrl));
+                    var resolvedLicenseInfo = new LicenseInfo(package.Id, package.Version, licenseExpression, licenseUrl);
+                    results.Add(resolvedLicenseInfo);
+                    
+                    // Cache the result
+                    if (_cache is not null)
+                        await _cache.SetAsync(resolvedLicenseInfo);
                 }
                 catch (OperationCanceledException)
                 {
@@ -79,9 +107,18 @@ public class NuGetLicenseResolver : ILicenseResolver
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to resolve license for {PackageId} {Version}", package.Id, package.Version);
-                    results.Add(new LicenseInfo(package.Id, package.Version, null, null));
+                    var licenseInfo = new LicenseInfo(package.Id, package.Version, null, null);
+                    results.Add(licenseInfo);
+                    
+                    // Cache the failed result to avoid repeated failures
+                    if (_cache is not null)
+                        await _cache.SetAsync(licenseInfo);
                 }
             });
+
+        // Save cache after all packages are resolved
+        if (_cache is not null)
+            await _cache.SaveAsync();
 
         return results.OrderBy(r => r.PackageId).ThenBy(r => r.Version).ToList();
     }
