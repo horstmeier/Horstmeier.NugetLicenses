@@ -44,6 +44,12 @@ var enableLicenseHeuristicsOption = new Option<bool>(
     aliases: ["--enable-license-heuristics"],
     description: "Enable license file heuristics to identify unknown licenses from URLs (disabled by default)");
 
+var configFileOption = new Option<string?>(
+    aliases: ["--config-file"],
+    description: "Path to a nuget-licenses.json config file. When specified, bypasses all auto-discovered " +
+                 "config files (global and project-level). Only built-in defaults, this file, " +
+                 "environment variables, and CLI options apply.");
+
 rootCommand.AddOption(projectPathOption);
 rootCommand.AddOption(showAllPackagesOption);
 rootCommand.AddOption(outputFormatOption);
@@ -52,6 +58,7 @@ rootCommand.AddOption(disableCacheOption);
 rootCommand.AddOption(cacheDurationOption);
 rootCommand.AddOption(nugetSourceOption);
 rootCommand.AddOption(enableLicenseHeuristicsOption);
+rootCommand.AddOption(configFileOption);
 
 // Add validation for output format
 outputFormatOption.AddValidator(result =>
@@ -64,22 +71,24 @@ outputFormatOption.AddValidator(result =>
 });
 
 CommandLineOptions? cliOptions = null;
-rootCommand.SetHandler((projectPath, showAll, format, quiet, disableCache, cacheDays, nugetSource, enableHeuristics) =>
+rootCommand.SetHandler(ctx =>
 {
+    var pr = ctx.ParseResult;
+    var projectPath = pr.GetValueForOption(projectPathOption)!;
+    var format = pr.GetValueForOption(outputFormatOption)!;
     cliOptions = new CommandLineOptions
     {
         ProjectPath = projectPath != "." ? projectPath : null,
-        ShowAllPackages = showAll ? true : null,
+        ShowAllPackages = pr.GetValueForOption(showAllPackagesOption) ? true : null,
         OutputFormat = format != "console" ? format : null,
-        Quiet = quiet ? true : null,
-        DisableCache = disableCache ? true : null,
-        CacheDurationDays = cacheDays,
-        NuGetSource = nugetSource,
-        EnableLicenseFileHeuristics = enableHeuristics
+        Quiet = pr.GetValueForOption(quietOption) ? true : null,
+        DisableCache = pr.GetValueForOption(disableCacheOption) ? true : null,
+        CacheDurationDays = pr.GetValueForOption(cacheDurationOption),
+        NuGetSource = pr.GetValueForOption(nugetSourceOption),
+        EnableLicenseFileHeuristics = pr.GetValueForOption(enableLicenseHeuristicsOption),
+        ConfigFile = pr.GetValueForOption(configFileOption)
     };
-},
-projectPathOption, showAllPackagesOption, outputFormatOption, quietOption,
-disableCacheOption, cacheDurationOption, nugetSourceOption, enableLicenseHeuristicsOption);
+});
 
 var parseResult = await rootCommand.InvokeAsync(args);
 
@@ -87,17 +96,54 @@ var parseResult = await rootCommand.InvokeAsync(args);
 if (parseResult != 0 || cliOptions == null)
     return parseResult;
 
-// Load base configuration from appsettings.json and environment variables
-var configuration = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: true)
+// Resolve project path early — needed for config file walk-up discovery
+var resolvedProjectPath = Path.GetFullPath(cliOptions.ProjectPath ?? ".");
+
+// Layer 1: built-in defaults (LicenseCheckSettings property initializers)
+var settings = new LicenseCheckSettings();
+
+if (cliOptions.ConfigFile != null)
+{
+    // Explicit --config-file bypasses all auto-discovered config files
+    if (!File.Exists(cliOptions.ConfigFile))
+    {
+        Console.Error.WriteLine($"Error: Config file not found: {cliOptions.ConfigFile}");
+        return 2;
+    }
+    var explicitConfig = ConfigurationLoader.LoadConfigFile(cliOptions.ConfigFile);
+    if (explicitConfig != null)
+        ConfigurationLoader.Apply(settings, explicitConfig);
+}
+else
+{
+    // Layer 2: global user config (~/.config/nuget-licenses/config.json)
+    var globalConfigPath = ConfigurationLoader.GetGlobalConfigPath();
+    if (File.Exists(globalConfigPath))
+    {
+        var globalConfig = ConfigurationLoader.LoadConfigFile(globalConfigPath);
+        if (globalConfig != null)
+            ConfigurationLoader.Apply(settings, globalConfig);
+    }
+
+    // Layer 3: project config (nuget-licenses.json, walk up from project path)
+    var projectConfigPath = ConfigurationLoader.FindProjectConfig(resolvedProjectPath);
+    if (projectConfigPath != null)
+    {
+        var projectConfig = ConfigurationLoader.LoadConfigFile(projectConfigPath);
+        if (projectConfig != null)
+            ConfigurationLoader.Apply(settings, projectConfig);
+    }
+}
+
+// Layer 4: environment variables (LICENSECHECK_ prefix, e.g. LICENSECHECK_NuGetSource)
+var envConfig = new ConfigurationBuilder()
     .AddEnvironmentVariables(prefix: "LICENSECHECK_")
     .Build();
+var envSettings = new NugetLicensesConfig();
+envConfig.Bind(envSettings);
+ConfigurationLoader.Apply(settings, envSettings);
 
-var settings = new LicenseCheckSettings();
-configuration.GetSection("LicenseCheck").Bind(settings);
-
-// Merge CLI options with settings
+// Layer 5: CLI options
 var quiet = MergeSettings(settings, cliOptions);
 
 // Configuration validation

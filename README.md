@@ -51,60 +51,100 @@ Exit codes:
 
 ## Configuration
 
-Configuration is layered (later sources override earlier ones):
+Configuration is layered — later sources override earlier ones, with **replace semantics**
+for arrays (`PermittedLicenses`, `ExemptPackages`): a higher-priority source replaces the
+entire array rather than merging with it.
 
-1. `appsettings.json` (defaults)
-2. Environment variables (prefix `LICENSECHECK_`)
-3. Command-line arguments
+| Priority | Source | Notes |
+|---|---|---|
+| 1 (lowest) | Built-in defaults | Hardcoded sensible values |
+| 2 | Global config file | `~/.config/nuget-licenses/config.json` (Linux/macOS) or `%APPDATA%\nuget-licenses\config.json` (Windows) |
+| 3 | Project config file | `nuget-licenses.json`, searched upward from `--project-path` to the filesystem root |
+| 4 | Environment variables | Prefix `LICENSECHECK_` |
+| 5 | `--config-file <path>` | **Skips layers 2 and 3** — see [Explicit config file](#explicit-config-file) |
+| 6 (highest) | CLI options | Always win |
 
-### appsettings.json
+### nuget-licenses.json
+
+Place a `nuget-licenses.json` file in your solution or project root and commit it to source
+control. The tool walks up the directory tree from `--project-path` and uses the first file
+it finds.
 
 ```json
 {
-  "LicenseCheck": {
-    "PermittedLicenses": [
-      "MIT",
-      "Apache-2.0",
-      "BSD-2-Clause",
-      "BSD-3-Clause",
-      "ISC",
-      "MS-PL",
-      "Unlicense",
-      "0BSD"
-    ],
-    "ExemptPackages": [
-      {
-        "PackageName": "Example.Package",
-        "Version": "1.0.0",
-        "Reason": "Manually reviewed and approved"
-      }
-    ],
-    "ProjectPath": ".",
-    "ShowAllPackages": false,
-    "OutputFormat": "console",
-    "EnableLicenseFileHeuristics": false
-  }
+  "PermittedLicenses": [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MS-PL",
+    "Unlicense",
+    "0BSD"
+  ],
+  "ExemptPackages": [
+    {
+      "PackageName": "Example.Package",
+      "Version": "1.0.0",
+      "Reason": "Manually reviewed and approved"
+    }
+  ],
+  "NuGetSource": "https://api.nuget.org/v3/index.json",
+  "EnableCache": true,
+  "CacheDurationDays": 365,
+  "EnableLicenseFileHeuristics": false
 }
 ```
 
-| Setting | Description                                                                                 |
-|---|---------------------------------------------------------------------------------------------|
-| `PermittedLicenses` | SPDX license identifiers that are allowed                                                   |
-| `ExemptPackages` | Packages to skip validation (see [Exempt Packages](#exempt-packages))                       |
-| `ProjectPath` | Root directory to scan recursively for `packages.lock.json` files                           |
-| `ShowAllPackages` | When `true`, include all packages in the report (not just violations)                       |
-| `OutputFormat` | Report format: `console` (default), `markdown`, `html`, or `json`                           |
-| `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`)                    |
-| `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs        |
-| `CacheDurationDays` | Number of days to keep cached license information (default: 7)                              |
+| Setting | Description |
+|---|---|
+| `PermittedLicenses` | SPDX license identifiers that are allowed |
+| `ExemptPackages` | Packages to skip validation (see [Exempt Packages](#exempt-packages)) |
+| `NuGetSource` | NuGet v3 API source URL (default: `https://api.nuget.org/v3/index.json`) |
+| `EnableCache` | When `true` (default), cache license information locally to speed up subsequent runs |
+| `CacheDurationDays` | Number of days to keep cached license information (default: 365) |
 | `EnableLicenseFileHeuristics` | When `true`, enables heuristics for license detection from license files (default: `false`) |
+
+### Global config file
+
+A global config applies to all projects on the machine. Place it at:
+- Linux/macOS: `~/.config/nuget-licenses/config.json`
+- Windows: `%APPDATA%\nuget-licenses\config.json`
+
+It uses the same JSON format as `nuget-licenses.json`. Project-level settings override
+global settings.
+
+### Explicit config file
+
+> **When `--config-file` is specified, the global config file and the auto-discovered
+> project `nuget-licenses.json` are both skipped entirely.** Only built-in defaults,
+> the specified file, environment variables, and CLI options apply.
+
+This is the recommended pattern for CI pipelines, where you want a central, authoritative
+policy that cannot be overridden by a `nuget-licenses.json` file a developer may have
+checked in:
+
+```bash
+# CI: enforce central policy — ignores any nuget-licenses.json in the repo
+nuget-licenses --config-file /ci/central-license-policy.json
+```
 
 ### Environment variables
 
-Use the `LICENSECHECK_` prefix with section separators as `__`:
+Use the `LICENSECHECK_` prefix. For scalar values:
 
 ```bash
-export LICENSECHECK_LicenseCheck__ProjectPath=/path/to/project
+export LICENSECHECK_NuGetSource=https://my.private.feed/v3/index.json
+export LICENSECHECK_EnableCache=false
+export LICENSECHECK_CacheDurationDays=7
+export LICENSECHECK_EnableLicenseFileHeuristics=true
+```
+
+For arrays, use index-based keys:
+
+```bash
+export LICENSECHECK_PermittedLicenses__0=MIT
+export LICENSECHECK_PermittedLicenses__1=Apache-2.0
 ```
 
 ### Command-line arguments
@@ -114,12 +154,13 @@ All command-line options use kebab-case with double dashes. Most options have sh
 Available options:
 - `--project-path <path>` or `-p <path>` — Root directory to scan
 - `--show-all-packages` or `-a` — Include all packages in report
-- `--output-format <format>` or `-o <format>` — Report format (console, markdown, json)
+- `--output-format <format>` or `-o <format>` — Report format (console, markdown, json, html)
 - `--quiet` or `-q` — Suppress info logging
 - `--disable-cache` — Disable local license caching (caching is enabled by default)
 - `--cache-duration-days <days>` — Cache duration in days
 - `--nuget-source <url>` — Custom NuGet API URL
 - `--enable-license-heuristics` — Enable license file heuristics to identify unknown licenses from URLs
+- `--config-file <path>` — Explicit config file; bypasses global and project auto-discovery
 
 Examples:
 ```bash
@@ -128,6 +169,7 @@ nuget-licenses -p /path/to/project --show-all-packages
 nuget-licenses --output-format json --quiet
 nuget-licenses --disable-cache
 nuget-licenses --enable-license-heuristics
+nuget-licenses --config-file /ci/policy.json
 ```
 
 ## License Cache
@@ -145,7 +187,7 @@ The cache significantly reduces scan time for large projects. To disable caching
 
 ```bash
 # Disable cache via environment variable
-export LICENSECHECK_LicenseCheck__EnableCache=false
+export LICENSECHECK_EnableCache=false
 
 # Disable cache via command line (simple flag, no value needed)
 nuget-licenses --disable-cache
@@ -279,18 +321,16 @@ When enabled and a NuGet package has no SPDX license expression in its metadata,
 
 ### Enabling License File Heuristics
 
-Via configuration file:
+Via `nuget-licenses.json`:
 ```json
 {
-  "LicenseCheck": {
-    "EnableLicenseFileHeuristics": true
-  }
+  "EnableLicenseFileHeuristics": true
 }
 ```
 
 Via environment variable:
 ```bash
-export LICENSECHECK_LicenseCheck__EnableLicenseFileHeuristics=true
+export LICENSECHECK_EnableLicenseFileHeuristics=true
 ```
 
 Via command-line:

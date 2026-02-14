@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
@@ -33,9 +32,9 @@ public class NuGetLicenseResolverTests
 
         var result = await _resolver.ResolveAsync(packages);
 
-        result.Should().HaveCount(1);
-        result[0].PackageId.Should().Be("Newtonsoft.Json");
-        result[0].LicenseExpression.Should().Be("MIT");
+        Assert.Single(result);
+        Assert.Equal("Newtonsoft.Json", result[0].PackageId);
+        Assert.Equal("MIT", result[0].LicenseExpression);
     }
 
     [Fact]
@@ -48,8 +47,8 @@ public class NuGetLicenseResolverTests
 
         var result = await _resolver.ResolveAsync(packages);
 
-        result.Should().HaveCount(1);
-        result[0].LicenseExpression.Should().BeNull();
+        Assert.Single(result);
+        Assert.Null(result[0].LicenseExpression);
     }
 
     [Fact]
@@ -63,7 +62,7 @@ public class NuGetLicenseResolverTests
 
         var result = await _resolver.ResolveAsync(packages);
 
-        result.Should().HaveCount(2);
-        result.Should().AllSatisfy(r => r.PackageId.Should().NotBeNullOrEmpty());
+        Assert.Equal(2, result.Count);
+        Assert.All(result, r => Assert.False(string.IsNullOrEmpty(r.PackageId)));
     }
 }

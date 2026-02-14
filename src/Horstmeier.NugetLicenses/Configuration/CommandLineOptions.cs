@@ -45,4 +45,11 @@ public class CommandLineOptions
     /// Enable license file heuristics to identify unknown licenses from URLs.
     /// </summary>
     public bool? EnableLicenseFileHeuristics { get; set; }
+
+    /// <summary>
+    /// Explicit config file path. When set, skips all auto-discovered config files
+    /// (global and project-level). Only built-in defaults, this file, environment
+    /// variables, and CLI options apply.
+    /// </summary>
+    public string? ConfigFile { get; set; }
 }

@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -64,13 +63,13 @@ public class PackageLockParserTests : IDisposable
         var path = CreateTempLockFile(json);
         var result = _parser.Parse(path);
 
-        result.Should().HaveCount(2);
-        result[0].Id.Should().Be("Newtonsoft.Json");
-        result[0].Version.Should().Be("13.0.3");
-        result[0].Type.Should().Be("Direct");
-        result[0].TargetFramework.Should().Be("net8.0");
-        result[1].Id.Should().Be("Serilog");
-        result[1].Type.Should().Be("Transitive");
+        Assert.Equal(2, result.Count);
+        Assert.Equal("Newtonsoft.Json", result[0].Id);
+        Assert.Equal("13.0.3", result[0].Version);
+        Assert.Equal("Direct", result[0].Type);
+        Assert.Equal("net8.0", result[0].TargetFramework);
+        Assert.Equal("Serilog", result[1].Id);
+        Assert.Equal("Transitive", result[1].Type);
     }
 
     [Fact]
@@ -93,9 +92,9 @@ public class PackageLockParserTests : IDisposable
         var path = CreateTempLockFile(json);
         var result = _parser.Parse(path);
 
-        result.Should().HaveCount(2);
-        result.Should().Contain(p => p.Id == "PackageA" && p.TargetFramework == "net8.0");
-        result.Should().Contain(p => p.Id == "PackageB" && p.TargetFramework == "net9.0");
+        Assert.Equal(2, result.Count);
+        Assert.Contains(result, p => p.Id == "PackageA" && p.TargetFramework == "net8.0");
+        Assert.Contains(result, p => p.Id == "PackageB" && p.TargetFramework == "net9.0");
     }
 
     [Fact]
@@ -118,8 +117,8 @@ public class PackageLockParserTests : IDisposable
         var path = CreateTempLockFile(json);
         var result = _parser.Parse(path);
 
-        result.Should().HaveCount(1);
-        result[0].Id.Should().Be("PackageA");
+        Assert.Single(result);
+        Assert.Equal("PackageA", result[0].Id);
     }
 
     [Fact]
@@ -135,7 +134,7 @@ public class PackageLockParserTests : IDisposable
         var path = CreateTempLockFile(json);
         var result = _parser.Parse(path);
 
-        result.Should().BeEmpty();
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -146,14 +145,13 @@ public class PackageLockParserTests : IDisposable
         var path = CreateTempLockFile(json);
         var result = _parser.Parse(path);
 
-        result.Should().BeEmpty();
+        Assert.Empty(result);
     }
 
     [Fact]
     public void Parse_MissingFile_ThrowsFileNotFoundException()
     {
-        var act = () => _parser.Parse("/nonexistent/packages.lock.json");
-        act.Should().Throw<FileNotFoundException>();
+        Assert.Throws<FileNotFoundException>(() => _parser.Parse("/nonexistent/packages.lock.json"));
     }
 
     [Fact]
@@ -184,11 +182,11 @@ public class PackageLockParserTests : IDisposable
         // No csproj files → legacy lock file scan
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(2);
-        result.Packages.Should().Contain(p => p.Id == "PackageA" && p.Version == "1.0.0");
-        result.Packages.Should().Contain(p => p.Id == "PackageB" && p.Version == "2.0.0");
-        result.LockFileCount.Should().Be(2);
-        result.Projects.Should().BeEmpty();
+        Assert.Equal(2, result.Packages.Count);
+        Assert.Contains(result.Packages, p => p.Id == "PackageA" && p.Version == "1.0.0");
+        Assert.Contains(result.Packages, p => p.Id == "PackageB" && p.Version == "2.0.0");
+        Assert.Equal(2, result.LockFileCount);
+        Assert.Empty(result.Projects);
     }
 
     [Fact]
@@ -198,10 +196,10 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().BeEmpty();
-        result.ProjectsByPackage.Should().BeEmpty();
-        result.LockFileCount.Should().Be(0);
-        result.Projects.Should().BeEmpty();
+        Assert.Empty(result.Packages);
+        Assert.Empty(result.ProjectsByPackage);
+        Assert.Equal(0, result.LockFileCount);
+        Assert.Empty(result.Projects);
     }
 
     [Fact]
@@ -223,9 +221,9 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(1);
-        result.Packages[0].Id.Should().Be("SharedPackage");
-        result.Packages[0].Version.Should().Be("3.0.0");
+        Assert.Single(result.Packages);
+        Assert.Equal("SharedPackage", result.Packages[0].Id);
+        Assert.Equal("3.0.0", result.Packages[0].Version);
     }
 
     [Fact]
@@ -259,20 +257,20 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(3);
-        result.LockFileCount.Should().Be(2);
+        Assert.Equal(3, result.Packages.Count);
+        Assert.Equal(2, result.LockFileCount);
 
         var sharedKey = "sharedpackage|1.0.0";
-        result.ProjectsByPackage.Should().ContainKey(sharedKey);
-        result.ProjectsByPackage[sharedKey].Should().BeEquivalentTo("projectA", "projectB");
+        Assert.True(result.ProjectsByPackage.ContainsKey(sharedKey));
+        Assert.Equivalent(new[] { "projectA", "projectB" }, result.ProjectsByPackage[sharedKey], strict: true);
 
         var uniqueAKey = "uniquea|2.0.0";
-        result.ProjectsByPackage.Should().ContainKey(uniqueAKey);
-        result.ProjectsByPackage[uniqueAKey].Should().BeEquivalentTo("projectA");
+        Assert.True(result.ProjectsByPackage.ContainsKey(uniqueAKey));
+        Assert.Equivalent(new[] { "projectA" }, result.ProjectsByPackage[uniqueAKey], strict: true);
 
         var uniqueBKey = "uniqueb|3.0.0";
-        result.ProjectsByPackage.Should().ContainKey(uniqueBKey);
-        result.ProjectsByPackage[uniqueBKey].Should().BeEquivalentTo("projectB");
+        Assert.True(result.ProjectsByPackage.ContainsKey(uniqueBKey));
+        Assert.Equivalent(new[] { "projectB" }, result.ProjectsByPackage[uniqueBKey], strict: true);
     }
 
     [Fact]
@@ -302,15 +300,15 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(2);
-        result.LockFileCount.Should().Be(1);
-        result.Projects.Should().HaveCount(1);
+        Assert.Equal(2, result.Packages.Count);
+        Assert.Equal(1, result.LockFileCount);
+        Assert.Single(result.Projects);
 
         var project = result.Projects[0];
-        project.ProjectName.Should().Be("MyApp");
-        project.PackageCount.Should().Be(2);
-        project.LockFileEnabled.Should().BeTrue();
-        project.HasLockFile.Should().BeTrue();
+        Assert.Equal("MyApp", project.ProjectName);
+        Assert.Equal(2, project.PackageCount);
+        Assert.True(project.LockFileEnabled);
+        Assert.True(project.HasLockFile);
     }
 
     [Fact]
@@ -336,15 +334,15 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(2);
-        result.LockFileCount.Should().Be(0);
-        result.Projects.Should().HaveCount(1);
+        Assert.Equal(2, result.Packages.Count);
+        Assert.Equal(0, result.LockFileCount);
+        Assert.Single(result.Projects);
 
         var project = result.Projects[0];
-        project.ProjectName.Should().Be("MyLib");
-        project.PackageCount.Should().Be(2);
-        project.LockFileEnabled.Should().BeFalse();
-        project.HasLockFile.Should().BeFalse();
+        Assert.Equal("MyLib", project.ProjectName);
+        Assert.Equal(2, project.PackageCount);
+        Assert.False(project.LockFileEnabled);
+        Assert.False(project.HasLockFile);
     }
 
     [Fact]
@@ -373,11 +371,11 @@ public class PackageLockParserTests : IDisposable
 
         var result = await _parser.ParseDirectoryAsync(root);
 
-        result.Packages.Should().HaveCount(1);
-        result.Packages[0].Id.Should().Be("FSharpPackage");
-        result.Projects.Should().HaveCount(1);
-        result.Projects[0].ProjectName.Should().Be("MyFSharpLib");
-        result.Projects[0].HasLockFile.Should().BeTrue();
+        Assert.Single(result.Packages);
+        Assert.Equal("FSharpPackage", result.Packages[0].Id);
+        Assert.Single(result.Projects);
+        Assert.Equal("MyFSharpLib", result.Projects[0].ProjectName);
+        Assert.True(result.Projects[0].HasLockFile);
     }
 
     public void Dispose()

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using FluentAssertions;
 using Horstmeier.NugetLicenses.Configuration;
 using Horstmeier.NugetLicenses.Models;
 using Horstmeier.NugetLicenses.Services;
@@ -39,13 +38,13 @@ public class ReportGeneratorTests
 
         var output = generator.Generate(violations, result);
 
-        output.Should().Contain("BadPackage");
-        output.Should().Contain("GPL-3.0");
-        output.Should().Contain("Reason: License 'GPL-3.0' is not permitted");
-        output.Should().Contain("Projects: src/ProjectA, src/ProjectB");
-        output.Should().Contain("UnknownPkg");
-        output.Should().Contain("Summary: 8/10 packages valid, 2 violation(s)");
-        output.Should().NotContain("GoodPackage");
+        Assert.Contains("BadPackage", output);
+        Assert.Contains("GPL-3.0", output);
+        Assert.Contains("Reason: License 'GPL-3.0' is not permitted", output);
+        Assert.Contains("Projects: src/ProjectA, src/ProjectB", output);
+        Assert.Contains("UnknownPkg", output);
+        Assert.Contains("Summary: 8/10 packages valid, 2 violation(s)", output);
+        Assert.DoesNotContain("GoodPackage", output);
     }
 
     [Fact]
@@ -62,10 +61,10 @@ public class ReportGeneratorTests
 
         var output = generator.Generate(entries, result);
 
-        output.Should().Contain("BadPackage");
-        output.Should().Contain("GoodPackage");
-        output.Should().Contain("MIT");
-        output.Should().Contain("Summary: 1/3 packages valid, 2 violation(s)");
+        Assert.Contains("BadPackage", output);
+        Assert.Contains("GoodPackage", output);
+        Assert.Contains("MIT", output);
+        Assert.Contains("Summary: 1/3 packages valid, 2 violation(s)", output);
     }
 
     [Fact]
@@ -82,13 +81,13 @@ public class ReportGeneratorTests
 
         var output = generator.Generate(entries, result);
 
-        output.Should().Contain("# License Report");
-        output.Should().Contain("## Violations");
-        output.Should().Contain("| BadPackage |");
-        output.Should().Contain("| Package | Version | License | Reason | Projects |");
-        output.Should().Contain("## Valid Packages");
-        output.Should().Contain("| GoodPackage |");
-        output.Should().Contain("**Summary:**");
+        Assert.Contains("# License Report", output);
+        Assert.Contains("## Violations", output);
+        Assert.Contains("| BadPackage |", output);
+        Assert.Contains("| Package | Version | License | Reason | Projects |", output);
+        Assert.Contains("## Valid Packages", output);
+        Assert.Contains("| GoodPackage |", output);
+        Assert.Contains("**Summary:**", output);
     }
 
     [Fact]
@@ -108,12 +107,12 @@ public class ReportGeneratorTests
         var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
 
-        root.GetProperty("summary").GetProperty("total").GetInt32().Should().Be(3);
-        root.GetProperty("summary").GetProperty("valid").GetInt32().Should().Be(1);
-        root.GetProperty("summary").GetProperty("violations").GetInt32().Should().Be(2);
+        Assert.Equal(3, root.GetProperty("summary").GetProperty("total").GetInt32());
+        Assert.Equal(1, root.GetProperty("summary").GetProperty("valid").GetInt32());
+        Assert.Equal(2, root.GetProperty("summary").GetProperty("violations").GetInt32());
 
-        root.GetProperty("violations").GetArrayLength().Should().Be(2);
-        root.GetProperty("packages").GetArrayLength().Should().Be(3);
+        Assert.Equal(2, root.GetProperty("violations").GetArrayLength());
+        Assert.Equal(3, root.GetProperty("packages").GetArrayLength());
     }
 
     [Fact]
@@ -133,8 +132,8 @@ public class ReportGeneratorTests
         var doc = JsonDocument.Parse(output);
         var root = doc.RootElement;
 
-        root.TryGetProperty("packages", out _).Should().BeFalse();
-        root.GetProperty("violations").GetArrayLength().Should().Be(2);
+        Assert.False(root.TryGetProperty("packages", out _));
+        Assert.Equal(2, root.GetProperty("violations").GetArrayLength());
     }
 
     [Fact]
@@ -148,7 +147,7 @@ public class ReportGeneratorTests
 
         var output = generator.Generate(entries, result);
 
-        output.Should().Contain("Summary: 5/5 packages valid, 0 violation(s)");
-        output.Should().NotContain("Reason:");
+        Assert.Contains("Summary: 5/5 packages valid, 0 violation(s)", output);
+        Assert.DoesNotContain("Reason:", output);
     }
 }
