@@ -1,17 +1,17 @@
 {
-  "permittedLicenses": [
+  "PermittedLicenses": [
     "MIT",
     "Apache-2.0",
     "BSD-3-Clause"
   ],
-  "exemptPackages": [
+  "ExemptPackages": [
     {
-      "id": "horstmeier.nugetlicenses",
-      "reason": "Local project reference"
+      "PackageName": "horstmeier.nugetlicenses",
+      "Reason": "Local project reference"
     },
     {
-      "id": "xunit.abstractions",
-      "reason": "xUnit.net is licensed under Apache 2.0"
+      "PackageName": "xunit.abstractions",
+      "Reason": "xUnit.net is licensed under Apache 2.0"
     }
   ]
 }
